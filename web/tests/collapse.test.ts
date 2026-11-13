@@ -154,6 +154,15 @@ describe('collapsing a row', () => {
     expect(toast.current).not.toBeNull()
   })
 
+  test('only collapsed rows get the slim label class', () => {
+    app.settings.collapsed_rows = ['objective', 'notes']
+    render(Grid)
+    const has = (n: string) => screen.getByRole('rowheader', { name: n }).classList.contains('collapsed')
+    expect([has('Urgent'), has('Quick'), has('General'), has('Objectives'), has('Notes')]).toEqual([
+      false, false, false, true, true,
+    ])
+  })
+
   test('a collapsed row hides "+ add" for every project', () => {
     app.settings.collapsed_rows = ['urgent']
     render(Grid)

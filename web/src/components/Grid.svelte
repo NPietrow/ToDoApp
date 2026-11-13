@@ -63,7 +63,7 @@
 
       {#each TASK_TYPES as type (type.key)}
         <div role="row" aria-label={type.label} style="display:contents">
-          <div class="rl" role="rowheader">
+          <div class="rl" class:collapsed={collapsedRows.has(type.key)} role="rowheader">
             <button type="button" class="rlb" onclick={() => toggleRow(type.key)}>{type.label}</button>
           </div>
           {#each expanded as project (project.id)}
@@ -82,7 +82,7 @@
 
       <!-- Read-only for now: Task 17 replaces these cells with the editable NotesCell. -->
       <div role="row" aria-label="Notes" style="display:contents">
-        <div class="rl" role="rowheader">
+        <div class="rl" class:collapsed={collapsedRows.has('notes')} role="rowheader">
           <button type="button" class="rlb" onclick={() => toggleRow('notes')}>Notes</button>
         </div>
         {#each expanded as project (project.id)}
@@ -155,6 +155,11 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+  /* A collapsed row is slim: the label must not set the row height. */
+  .rl.collapsed {
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
   .rlb {
     padding: 0;
