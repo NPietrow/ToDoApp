@@ -1,0 +1,134 @@
+from datetime import UTC, date, datetime
+
+import pytest
+
+from todoapp.models import Status, TaskChanges, TaskType, new_id
+from todoapp.store.tasks import TaskNotFound, TaskRepository
+
+
+def test_create_appends_to_cell(tmp_path):
+    r = TaskRepository(tmp_path); pid = new_id()
+    a = r.create("A", pid, TaskType.QUICK); b = r.create("B", pid, TaskType.QUICK)
+    assert (a.order, b.order) == (0, 1)
+    assert (tmp_path / "tasks" / f"{a.id}.json").exists()
+
+
+def test_tick_and_untick_restores_previous_status(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    r.update(t.id, TaskChanges(status=Status.IN_PROGRESS))
+    done = r.set_done(t.id, True)
+    assert done.status == "done" and done.completed_at and done.status_before_done == "in_progress"
+    back = r.set_done(t.id, False)
+    assert back.status == "in_progress" and back.completed_at is None and back.status_before_done is None
+
+
+def test_update_null_vs_unset(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    r.update(t.id, TaskChanges(due_date=date(2026, 11, 20)))
+    assert r.update(t.id, TaskChanges(title="B")).due_date == date(2026, 11, 20)
+    assert r.update(t.id, TaskChanges(due_date=None)).due_date is None
+
+
+def test_update_rejects_blank_title(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    with pytest.raises(ValueError):
+        r.update(t.id, TaskChanges(title="   "))
+    assert r.get(t.id).title == "A"
+
+
+def test_update_status_done_and_back(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    d = r.update(t.id, TaskChanges(status=Status.DONE))
+    assert d.completed_at and d.status_before_done == "not_started"
+    b = r.update(t.id, TaskChanges(status=Status.BLOCKED))
+    assert b.status == "blocked" and b.completed_at is None and b.status_before_done is None
+
+
+def test_update_cell_change_goes_to_end(tmp_path):
+    r = TaskRepository(tmp_path); p = new_id()
+    r.create("A", p, TaskType.QUICK); b = r.create("B", p, TaskType.QUICK)
+    c = r.create("C", p)
+    assert r.update(c.id, TaskChanges(task_type=TaskType.QUICK)).order == 2
+    assert b.order == 1
+
+
+def test_all_and_get_stay_current_between_scans(tmp_path):
+    r = TaskRepository(tmp_path); r.scan([])
+    t = r.create("A", new_id())
+    assert [x.id for x in r.all()] == [t.id]
+    r.update(t.id, TaskChanges(title="Z"))
+    assert r.all()[0].title == "Z"
+    r.delete(t.id)
+    assert r.all() == []
+    r.restore(t.id)
+    assert [x.id for x in r.all()] == [t.id]
+
+
+def test_move_renumbers_target_cell(tmp_path):
+    r = TaskRepository(tmp_path); p1, p2 = new_id(), new_id()
+    a = r.create("A", p1); b = r.create("B", p2); c = r.create("C", p2)
+    r.move(a.id, p2, TaskType.URGENT, 0)
+    r.move(b.id, p2, TaskType.URGENT, 1)
+    cell = sorted((t for t in r.scan([]).tasks if t.project_id == p2 and t.task_type == "urgent"), key=lambda t: t.order)
+    assert [t.title for t in cell] == ["A", "B"] and [t.order for t in cell] == [0, 1]
+
+
+def test_move_renumbers_source_cell_and_clamps(tmp_path):
+    r = TaskRepository(tmp_path); p = new_id(), new_id()
+    a = r.create("A", p[0]); b = r.create("B", p[0]); c = r.create("C", p[0])
+    r.move(a.id, p[1], TaskType.GENERAL, 99)
+    assert (r.get(b.id).order, r.get(c.id).order, r.get(a.id).order) == (0, 1, 0)
+
+
+def test_delete_restore_empty_trash(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    r.delete(t.id)
+    assert not (tmp_path / "tasks" / f"{t.id}.json").exists() and (tmp_path / ".trash/tasks" / f"{t.id}.json").exists()
+    r.restore(t.id); r.delete(t.id)
+    assert r.empty_trash() == 1
+
+
+def test_reassign_open(tmp_path):
+    r = TaskRepository(tmp_path); p1, p2 = new_id(), new_id()
+    a = r.create("A", p1); b = r.create("B", p1); r.set_done(b.id, True)
+    c = r.create("C", p2)
+    assert r.reassign_open(p1, p2) == 1
+    assert r.get(a.id).project_id == p2 and r.get(a.id).order == 1
+    assert r.get(b.id).project_id == p1 and r.get(c.id).order == 0
+
+
+def test_scan_normalises_hand_written_file_with_any_name(tmp_path):
+    (tmp_path / "tasks").mkdir(parents=True)
+    (tmp_path / "tasks" / "from-copilot.json").write_text('{"title": "Hand made"}', encoding="utf-8")
+    res = TaskRepository(tmp_path).scan([])
+    assert [t.title for t in res.tasks] == ["Hand made"] and res.problems == []
+    assert not (tmp_path / "tasks" / "from-copilot.json").exists()
+    assert (tmp_path / "tasks" / f"{res.tasks[0].id}.json").exists()
+
+
+def test_reads_bom_file(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    f = tmp_path / "tasks" / f"{t.id}.json"
+    f.write_bytes(b"\xef\xbb\xbf" + f.read_bytes().replace(b"\n", b"\r\n"))
+    assert TaskRepository(tmp_path).scan([]).problems == []
+
+
+def test_problem_clears_when_file_fixed(tmp_path):
+    (tmp_path / "tasks").mkdir(parents=True); f = tmp_path / "tasks" / "half.json"
+    f.write_text('{"title": "x"', encoding="utf-8")
+    r = TaskRepository(tmp_path)
+    assert [p.file for p in r.scan([]).problems] == ["tasks/half.json"] and f.read_text() == '{"title": "x"'
+    f.write_text('{"title": "x"}', encoding="utf-8")
+    assert r.scan([]).problems == []
+
+
+def test_missing_title_is_problem_and_file_kept(tmp_path):
+    (tmp_path / "tasks").mkdir(parents=True); f = tmp_path / "tasks" / "no-title.json"
+    f.write_text('{"project": "x"}', encoding="utf-8")
+    res = TaskRepository(tmp_path).scan([])
+    assert res.tasks == [] and len(res.problems) == 1 and f.exists()
+
+
+def test_get_rejects_non_uuid(tmp_path):
+    with pytest.raises(TaskNotFound):
+        TaskRepository(tmp_path).get("../../etc")
