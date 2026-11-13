@@ -12,8 +12,12 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .api import intake as intake_api
+from .api import notes as notes_api
+from .api import projects as projects_api
 from .api import settings as settings_api
 from .api import state as state_api
+from .api import tasks as tasks_api
 from .config import AppSettings, RuntimeOptions
 from .context import AppContext
 from .security import LocalOnlyMiddleware
@@ -66,6 +70,8 @@ def create_app(
     _add_error_handlers(app)
     app.include_router(state_api.router)
     app.include_router(settings_api.router)
+    for module in (tasks_api, projects_api, notes_api, intake_api):
+        app.include_router(module.router)
     if STATIC_DIR.is_dir():  # mounted last so it never shadows /api
         app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
