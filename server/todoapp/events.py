@@ -15,6 +15,9 @@ class EventBus:
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
 
+    def has_loop(self) -> bool:
+        return self._loop is not None
+
     def subscribe(self) -> asyncio.Queue[str]:
         q: asyncio.Queue[str] = asyncio.Queue()
         with self._guard:

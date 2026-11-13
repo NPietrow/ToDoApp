@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .api import events as events_api
 from .api import intake as intake_api
 from .api import notes as notes_api
 from .api import projects as projects_api
@@ -53,6 +54,7 @@ def create_app(
     runtime: RuntimeOptions,
     config_path: Path | None = None,
     overrides: dict[str, object] | None = None,
+    watch: bool = True,
 ) -> FastAPI:
     ctx = AppContext(settings, runtime, config_path, overrides)
     settings = ctx.settings
@@ -61,7 +63,12 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ctx.bus.bind_loop(asyncio.get_running_loop())
         ctx.refresh()
-        yield
+        if watch:
+            ctx.start_watcher()
+        try:
+            yield
+        finally:
+            ctx.stop_watcher()
 
     app = FastAPI(title="ToDoApp", version=__version__, lifespan=lifespan)
     app.state.ctx = ctx
@@ -70,6 +77,7 @@ def create_app(
     _add_error_handlers(app)
     app.include_router(state_api.router)
     app.include_router(settings_api.router)
+    app.include_router(events_api.router)
     for module in (tasks_api, projects_api, notes_api, intake_api):
         app.include_router(module.router)
     if STATIC_DIR.is_dir():  # mounted last so it never shadows /api

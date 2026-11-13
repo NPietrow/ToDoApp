@@ -1,0 +1,100 @@
+import json
+import time
+from pathlib import Path
+
+from todoapp.watcher import DataWatcher
+
+
+def wait_for(predicate, timeout=5.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return predicate()
+
+
+def test_watcher_debounces_and_ignores_temp(tmp_path):
+    calls = []
+    w = DataWatcher(tmp_path, lambda: calls.append(1), debounce_s=0.2)
+    w.start()
+    try:
+        (tmp_path / "tasks").mkdir()
+        for i in range(5):
+            (tmp_path / "tasks" / f"{i}.json").write_text("{}")
+        (tmp_path / "tasks" / ".x.json.ab12.tmp").write_text("{}")
+        time.sleep(1.0)
+        assert len(calls) == 1
+    finally:
+        w.stop()
+
+
+def test_temp_files_alone_do_not_fire(tmp_path):
+    (tmp_path / "tasks").mkdir()
+    calls = []
+    w = DataWatcher(tmp_path, lambda: calls.append(1), debounce_s=0.1)
+    w.start()
+    try:
+        (tmp_path / "tasks" / ".x.json.ab12.tmp").write_text("{}")
+        (tmp_path / "tasks" / "~$lock.json").write_text("{}")
+        time.sleep(0.6)
+        assert calls == []
+    finally:
+        w.stop()
+
+
+def test_processed_and_trash_are_ignored(tmp_path):
+    (tmp_path / "inbox" / "processed").mkdir(parents=True)
+    (tmp_path / ".trash").mkdir()
+    calls = []
+    w = DataWatcher(tmp_path, lambda: calls.append(1), debounce_s=0.1)
+    w.start()
+    try:
+        (tmp_path / "inbox" / "processed" / "a.json").write_text("{}")
+        (tmp_path / ".trash" / "b.json").write_text("{}")
+        time.sleep(0.6)
+        assert calls == []
+        (tmp_path / "inbox" / "c.json").write_text("{}")
+        assert wait_for(lambda: len(calls) == 1)
+    finally:
+        w.stop()
+
+
+def test_stop_is_idempotent(tmp_path):
+    w = DataWatcher(tmp_path, lambda: None, debounce_s=0.1)
+    w.stop()  # before start
+    w.start()
+    w.stop()
+    w.stop()
+
+
+def test_raising_on_change_does_not_stop_the_watcher(tmp_path):
+    calls = []
+
+    def boom():
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    w = DataWatcher(tmp_path, boom, debounce_s=0.1)
+    w.start()
+    try:
+        (tmp_path / "a.json").write_text("{}")
+        assert wait_for(lambda: len(calls) == 1)
+        (tmp_path / "b.json").write_text("{}")
+        assert wait_for(lambda: len(calls) == 2)
+    finally:
+        w.stop()
+
+
+def test_dropping_a_file_in_inbox_becomes_a_task(client):
+    ctx = client.app.state.ctx
+    inbox = Path(ctx.settings.data_dir) / "inbox"
+    inbox.mkdir(parents=True, exist_ok=True)
+    tmp = inbox / "drop.json.part"
+    tmp.write_text(json.dumps({"title": "From the watcher"}), encoding="utf-8")
+    tmp.replace(inbox / "drop.json")
+
+    def has_task():
+        return any(t["title"] == "From the watcher" for t in client.get("/api/state").json()["tasks"])
+
+    assert wait_for(has_task, timeout=8.0)

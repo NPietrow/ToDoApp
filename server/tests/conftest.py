@@ -38,3 +38,14 @@ def make_client(tmp_path):
 @pytest.fixture
 def client(make_client):
     return make_client()
+
+
+@pytest.fixture
+def app_and_ctx(tmp_path):
+    """The app and its AppContext, built like `client` but without running the lifespan."""
+    app = create_app(
+        AppSettings(data_dir=tmp_path / "data"),
+        RuntimeOptions(),
+        config_path=tmp_path / "config" / "settings.json",
+    )
+    return app, app.state.ctx

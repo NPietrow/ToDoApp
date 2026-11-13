@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "httpx"]
+dev = ["pytest", "pytest-asyncio", "httpx"]
 windows = ["pystray", "Pillow", "pywin32; sys_platform == 'win32'"]
 
 [tool.setuptools.packages.find]
@@ -25,3 +25,5 @@ include = ["todoapp*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

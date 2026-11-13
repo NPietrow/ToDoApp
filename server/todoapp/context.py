@@ -13,6 +13,7 @@ from .models import Project, utcnow
 from .store.notes import NotesRepository
 from .store.projects import ProjectRepository
 from .store.tasks import FileProblem, TaskRepository
+from .watcher import DataWatcher
 
 
 PROJECTS_UNREADABLE = "projects.json can't be read — fix it or move it aside"
@@ -71,6 +72,7 @@ class AppContext:
         # Hold this for any write: `with ctx.lock:` (re-entrant, so nesting is fine).
         self.lock = threading.RLock()
         self.inbox_problems: list[FileProblem] = []
+        self._watcher: DataWatcher | None = None
         self._build_repositories()
 
     @staticmethod
@@ -105,14 +107,32 @@ class AppContext:
             self.tasks.scan(active)
         self.bus.publish("changed")
 
+    def start_watcher(self) -> None:
+        """Watch the current data folder, replacing any earlier watcher."""
+        with self.lock:
+            self.stop_watcher()
+            d = Path(self.settings.data_dir)
+            d.mkdir(parents=True, exist_ok=True)
+            self._watcher = DataWatcher(d, self.refresh)
+            self._watcher.start()
+
+    def stop_watcher(self) -> None:
+        with self.lock:
+            watcher, self._watcher = self._watcher, None
+        if watcher is not None:
+            watcher.stop()
+
     def switch_data_dir(self, path: Path) -> None:
         with self.lock:
             path = Path(path)
             path.mkdir(parents=True, exist_ok=True)
             self.settings = self.settings.model_copy(update={"data_dir": path})
             self._build_repositories()
-            # Task 8 restarts the folder watcher here.
+            was_watching = self._watcher is not None
+            self.stop_watcher()
             self.refresh()
+            if was_watching:
+                self.start_watcher()
 
     def save_settings(self) -> None:
         with self.lock:
