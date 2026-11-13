@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from datetime import UTC, date, datetime
 
 import pytest
@@ -132,3 +134,60 @@ def test_missing_title_is_problem_and_file_kept(tmp_path):
 def test_get_rejects_non_uuid(tmp_path):
     with pytest.raises(TaskNotFound):
         TaskRepository(tmp_path).get("../../etc")
+
+
+def _hand_file(tmp_path, name="from-copilot.json"):
+    (tmp_path / "tasks").mkdir(parents=True, exist_ok=True)
+    f = tmp_path / "tasks" / name
+    f.write_text('{"title": "Hand made"}', encoding="utf-8")
+    return f
+
+
+def test_unlink_failure_leaves_no_duplicate_and_retries(tmp_path, monkeypatch):
+    f = _hand_file(tmp_path)
+    real = Path.unlink
+
+    def locked(self, *a, **k):
+        if self.name == "from-copilot.json":
+            raise PermissionError("locked")
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", locked)
+    r = TaskRepository(tmp_path)
+    for _ in range(3):
+        res = r.scan([])
+        assert res.tasks == [] and [p.file for p in res.problems] == ["tasks/from-copilot.json"]
+    assert sorted(p.name for p in (tmp_path / "tasks").glob("*.json")) == ["from-copilot.json"]
+    monkeypatch.undo()
+    res = r.scan([])
+    assert [t.title for t in res.tasks] == ["Hand made"] and res.problems == []
+    assert not f.exists() and len(list((tmp_path / "tasks").glob("*.json"))) == 1
+
+
+def test_write_failure_problem_is_not_cached(tmp_path, monkeypatch):
+    f = _hand_file(tmp_path)
+    r = TaskRepository(tmp_path)
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("todoapp.store.tasks.atomic_write_json", boom)
+    assert len(r.scan([]).problems) == 1 and f.exists()
+    monkeypatch.undo()
+    res = r.scan([])
+    assert res.problems == [] and [t.title for t in res.tasks] == ["Hand made"]
+
+
+def test_delete_never_overwrites_earlier_trashed_copy(tmp_path):
+    r = TaskRepository(tmp_path); t = r.create("A", new_id())
+    original = (tmp_path / "tasks" / f"{t.id}.json").read_text(encoding="utf-8")
+    r.delete(t.id)
+    # a hand-dropped file reusing the trashed id
+    (tmp_path / "tasks" / f"{t.id}.json").write_text(original.replace('"A"', '"B"'), encoding="utf-8")
+    r2 = TaskRepository(tmp_path); r2.scan([])
+    r2.delete(t.id)
+    trashed = list((tmp_path / ".trash" / "tasks").glob("*.json"))
+    assert len(trashed) == 2
+    assert {json.loads(p.read_text(encoding="utf-8"))["title"] for p in trashed} == {"A", "B"}
+    assert r2.restore(t.id).title == "B"
+    assert r2.empty_trash() == 1

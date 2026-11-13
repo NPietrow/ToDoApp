@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -133,7 +134,11 @@ class TaskRepository:
             if hit and hit[0] == sig and not (isinstance(hit[1], Task) and hit[1].id in tasks):
                 result = hit[1]
             else:
-                result = self._read_one(path, active, now, tasks)
+                result, transient = self._read_one(path, active, now, tasks)
+                if transient:
+                    # environment problem (locked file, disk error): retry on the next scan
+                    problems.append(result)
+                    continue
                 if isinstance(result, Task):
                     # the file may have been rewritten or renamed; re-stat its final home
                     final = self._path(result.id)
@@ -156,37 +161,43 @@ class TaskRepository:
 
     def _read_one(
         self, path: Path, active: Sequence[Project], now: datetime, seen: dict[str, Task]
-    ) -> Task | FileProblem:
+    ) -> tuple[Task | FileProblem, bool]:
+        """Returns (result, transient); a transient problem must not be cached."""
         rel = self._rel(path)
         try:
             raw = read_json(path)
         except (ValueError, OSError) as e:
-            return FileProblem(rel, f"unreadable: {e}")
+            return FileProblem(rel, f"unreadable: {e}"), False
         if not isinstance(raw, dict):
-            return FileProblem(rel, "not a JSON object")
+            return FileProblem(rel, "not a JSON object"), False
         task = self._complete(raw)
         complete = task is not None
         if task is None:
             try:
                 task = normalise_task(raw, active, now)
             except IntakeError as e:
-                return FileProblem(rel, str(e))
+                return FileProblem(rel, str(e)), False
         target = self._path(task.id)
         if complete and target == path and task.id not in seen:
-            return task  # already in canonical form; nothing to write
+            return task, False  # already in canonical form; nothing to write
         if task.id in seen or (target.exists() and target != path):
             task = task.model_copy(update={"id": new_id()})  # id clash: never overwrite another file
             target = self._path(task.id)
         try:
             atomic_write_json(target, task.model_dump(mode="json"))
         except OSError as e:
-            return FileProblem(rel, f"could not write normalised file: {e}")
+            return FileProblem(rel, f"could not write normalised file: {e}"), True
         if target != path:
             try:
                 path.unlink()  # only after the replacement is safely on disk
-            except OSError:
-                pass
-        return task
+            except OSError as e:
+                # Keep the original, drop the copy, so a retry cannot create duplicates.
+                try:
+                    target.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return FileProblem(rel, f"could not replace file: {e}"), True
+        return task, False
 
     # -- queries ----------------------------------------------------------
     def all(self) -> list[Task]:
@@ -299,7 +310,16 @@ class TaskRepository:
         if not path.is_file():
             raise TaskNotFound(id)
         self._trash_dir.mkdir(parents=True, exist_ok=True)
-        os.replace(path, self._trash_dir / path.name)
+        dest = self._trash_dir / path.name
+        if dest.exists():  # never overwrite an earlier trashed copy
+            n = 0
+            while True:
+                aside = self._trash_dir / f"{id}.{time.time_ns()}{'.' + str(n) if n else ''}.json"
+                if not aside.exists():
+                    break
+                n += 1
+            os.replace(dest, aside)
+        os.replace(path, dest)
         self._tasks.pop(id, None)
 
     def restore(self, id: str) -> Task:
