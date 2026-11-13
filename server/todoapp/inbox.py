@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .fsutil import is_temp_file
-from .intake import extract_items, normalise_items
+from .intake import normalise_items, parse_strict
 from .models import Project
 from .normalise import IntakeError
 from .store.tasks import FileProblem, TaskRepository
@@ -43,8 +43,7 @@ def process_inbox(
     for path in files:
         rel = f"inbox/{path.name}"
         try:
-            text = path.read_text(encoding="utf-8-sig")
-            items = extract_items(text)
+            items = parse_strict(path.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError, IntakeError) as e:
             result.problems.append(FileProblem(rel, str(e)))
             continue
@@ -52,14 +51,23 @@ def process_inbox(
         result.problems.extend(FileProblem(rel, e) for e in errors)
         if not valid:
             continue  # nothing usable: leave the file where it is
+        # Claim the file first, so a failed move can never lead to duplicate imports.
+        try:
+            processed = inbox / "processed"
+            processed.mkdir(exist_ok=True)
+            target = _processed_target(processed, path.name, now)
+            os.replace(path, target)
+        except OSError as e:
+            result.problems.append(FileProblem(rel, f"could not move file: {e}"))
+            continue
+        added = 0
         try:
             for t in valid:
                 tasks.add(t)
-            processed = inbox / "processed"
-            processed.mkdir(exist_ok=True)
-            os.replace(path, _processed_target(processed, path.name, now))
+                added += 1
         except OSError as e:
-            result.problems.append(FileProblem(rel, f"could not import: {e}"))
-            continue
-        result.imported += len(valid)
+            result.problems.append(
+                FileProblem(f"inbox/processed/{target.name}", f"imported {added} of {len(valid)} tasks: {e}")
+            )
+        result.imported += added
     return result

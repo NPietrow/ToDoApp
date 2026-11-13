@@ -70,3 +70,57 @@ def test_inbox_handles_bom_skips_temp_and_ignores_processed_and_other_files(tmp_
 def test_inbox_missing_folder_is_fine(tmp_path):
     res = process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
     assert res.imported == 0 and res.problems == []
+
+
+def test_inbox_move_failure_adds_nothing_and_retries_once(tmp_path, monkeypatch):
+    import os
+
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "a.json").write_text('[{"title": "a"}, {"title": "b"}]')
+    repo = TaskRepository(tmp_path)
+
+    def boom(*a, **k):
+        raise PermissionError("in use")
+
+    with monkeypatch.context() as m:
+        m.setattr(os, "replace", boom)
+        res = process_inbox(tmp_path, repo, [], NOW)
+    assert res.imported == 0 and [p.file for p in res.problems] == ["inbox/a.json"]
+    assert "could not move file" in res.problems[0].error
+    assert (inbox / "a.json").exists() and repo.scan([]).tasks == []
+    res = process_inbox(tmp_path, repo, [], NOW)
+    assert res.imported == 2 and res.problems == []
+    assert len(repo.scan([]).tasks) == 2
+
+
+def test_inbox_truncated_file_left_and_reported(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "t.json").write_text('{"tasks":[{"title":"a"},{"title":"b"')
+    repo = TaskRepository(tmp_path)
+    res = process_inbox(tmp_path, repo, [], NOW)
+    assert res.imported == 0 and [p.file for p in res.problems] == ["inbox/t.json"]
+    assert res.problems[0].error.startswith("invalid JSON")
+    assert (inbox / "t.json").exists() and repo.scan([]).tasks == []
+
+
+def test_inbox_fenced_text_is_not_accepted(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "f.json").write_text('Here:\n```json\n[{"title": "a"}]\n```')
+    res = process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
+    assert res.imported == 0 and len(res.problems) == 1 and (inbox / "f.json").exists()
+
+
+import pytest
+
+
+@pytest.mark.parametrize("text", ["[]", '{"tasks": []}'])
+def test_inbox_empty_list_reported(tmp_path, text):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "e.json").write_text(text)
+    res = process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
+    assert res.imported == 0 and [p.file for p in res.problems] == ["inbox/e.json"]
+    assert (inbox / "e.json").exists()

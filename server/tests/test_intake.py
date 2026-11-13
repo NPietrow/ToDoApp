@@ -73,3 +73,11 @@ def test_import_skips_invalid_items(tmp_path):
 def test_import_nothing_extractable_raises(tmp_path):
     with pytest.raises(IntakeError):
         import_text("hello", TaskRepository(tmp_path), [], NOW)
+
+
+@pytest.mark.parametrize("text", ["[]", '{"tasks": []}'])
+def test_empty_list_counts_as_nothing(text, tmp_path):
+    with pytest.raises(IntakeError):
+        extract_items(text)
+    with pytest.raises(IntakeError):
+        import_text(text, TaskRepository(tmp_path), [], NOW)
