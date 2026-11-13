@@ -11,8 +11,10 @@
         type="button"
         class="act"
         onclick={() => {
-          toast.current?.onAction?.()
+          // Clear first: the action may show a toast of its own.
+          const act = toast.current?.onAction
           clearToast()
+          act?.()
         }}>{toast.current.actionLabel}</button
       >
     {/if}

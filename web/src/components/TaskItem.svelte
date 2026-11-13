@@ -1,12 +1,15 @@
 <script lang="ts">
   // One task card in a Grid cell. The tick box is wired here; Task 16 opens the pop-up on
-  // a click elsewhere on the card. The project's accent comes from the enclosing cell's
+  // a click elsewhere on the card. Right-click, Shift+F10 and the ContextMenu key open its menu
+  // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
   // --accent custom property.
   import { setDone } from '../lib/api'
   import { formatDue, isToday } from '../lib/dates'
+  import { deleteWithUndo } from '../lib/menus'
   import { app, refresh } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
   import type { Task } from '../lib/types'
+  import { ui } from '../lib/ui.svelte'
 
   let { task }: { task: Task } = $props()
 
@@ -31,6 +34,26 @@
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   }
 
+  function openMenu(x: number, y: number) {
+    ui.contextMenu = { x, y, kind: 'task', id: task.id }
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    // Only keys pressed on the card itself, never on the tick box.
+    if (e.target !== e.currentTarget) return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      ui.openTaskId = task.id
+    } else if (e.key === 'Delete') {
+      e.preventDefault()
+      void deleteWithUndo(task)
+    } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      e.preventDefault()
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      openMenu(r.left + 16, r.top + r.height / 2)
+    }
+  }
+
   async function toggle(e: MouseEvent) {
     e.stopPropagation()
     const next = !done
@@ -47,8 +70,13 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
 <div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}
-  draggable="true" ondragstart={dragStart} role="group"
+  draggable="true" ondragstart={dragStart} role="group" tabindex="0" {onkeydown}
+  oncontextmenu={(e) => {
+    e.preventDefault()
+    openMenu(e.clientX, e.clientY)
+  }}
 >
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
     draggable="false" onclick={toggle}
@@ -78,6 +106,10 @@
   }
   .pin {
     font-weight: 700;
+  }
+  .t:focus-visible {
+    outline: 2px solid var(--accent, #9a9a9a);
+    outline-offset: 1px;
   }
   .done {
     color: #aaa;

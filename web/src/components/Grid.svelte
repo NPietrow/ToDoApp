@@ -3,9 +3,13 @@
   // With no active projects it shows the empty board instead.
   import { toggleRow } from '../lib/collapse'
   import { colourOf } from '../lib/palette'
+  import { closeProjectNow, projectMenuItems, taskMenuItems } from '../lib/menus'
   import { app } from '../lib/state.svelte'
   import { linkify } from '../lib/text'
-  import { TASK_TYPES, type RowKey } from '../lib/types'
+  import { TASK_TYPES, type Project, type RowKey } from '../lib/types'
+  import { ui } from '../lib/ui.svelte'
+  import CloseProjectDialog from './CloseProjectDialog.svelte'
+  import ContextMenu from './ContextMenu.svelte'
   import CollapsedColumn from './CollapsedColumn.svelte'
   import GridCell from './GridCell.svelte'
   import ProjectHeader from './ProjectHeader.svelte'
@@ -35,18 +39,55 @@
     return (app.notes[projectId] ?? '').split('\n').filter((l) => l.trim() !== '').length
   }
 
-  let creating = $state(false)
+  type Dialog =
+    | { kind: 'create'; position?: number }
+    | { kind: 'rename'; project: Project }
+    | { kind: 'close'; project: Project }
+  let dialog: Dialog | null = $state(null)
+
+  // The one open context menu, built from what was right-clicked. A target that has since
+  // vanished (deleted elsewhere) shows no menu.
+  const menu = $derived.by(() => {
+    const cm = ui.contextMenu
+    if (!cm) return null
+    if (cm.kind === 'task') {
+      const task = app.tasks.find((t) => t.id === cm.id)
+      if (!task) return null
+      return {
+        items: taskMenuItems(task, {
+          projects,
+          tasks: app.tasks,
+          today: app.today,
+          openTask: (id) => (ui.openTaskId = id),
+        }),
+      }
+    }
+    const index = projects.findIndex((p) => p.id === cm.id)
+    if (index < 0) return null
+    const project = projects[index]
+    return {
+      items: projectMenuItems(project, index, projects.length, {
+        insertAt: (position) => (dialog = { kind: 'create', position }),
+        rename: () => (dialog = { kind: 'rename', project }),
+        close: () => {
+          const open = app.tasks.some((t) => t.project_id === project.id && t.status !== 'done')
+          if (open) dialog = { kind: 'close', project }
+          else void closeProjectNow(project.id)
+        },
+      }),
+    }
+  })
 </script>
 
 {#if projects.length === 0}
   <div class="empty">
     <p>No projects yet</p>
-    <button type="button" class="btn" onclick={() => (creating = true)}>
+    <button type="button" class="btn" onclick={() => (dialog = { kind: 'create' })}>
       Create your first project
     </button>
   </div>
 {:else}
-  <div class="grid-scroll">
+  <div class="grid-scroll"><div class="board">
     <div class="grid" role="grid" aria-label="Grid" style:grid-template-columns={columns}>
       <div role="row" style="display:contents">
         <div class="corner"></div>
@@ -104,11 +145,26 @@
         {/each}
       </div>
     </div>
-  </div>
+    <button type="button" class="addproj" onclick={() => (dialog = { kind: 'create', position: projects.length })}
+      >+ project</button
+    >
+  </div></div>
 {/if}
 
-{#if creating}
-  <ProjectNameDialog mode="create" onClose={() => (creating = false)} />
+{#if ui.contextMenu && menu}
+  {#key ui.contextMenu}
+    <ContextMenu items={menu.items} x={ui.contextMenu.x} y={ui.contextMenu.y}
+      onclose={() => (ui.contextMenu = null)} />
+  {/key}
+{/if}
+
+{#if dialog?.kind === 'create'}
+  <ProjectNameDialog mode="create" position={dialog.position} onClose={() => (dialog = null)} />
+{:else if dialog?.kind === 'rename'}
+  <ProjectNameDialog mode="rename" projectId={dialog.project.id} initialName={dialog.project.name}
+    onClose={() => (dialog = null)} />
+{:else if dialog?.kind === 'close'}
+  <CloseProjectDialog projectId={dialog.project.id} onClose={() => (dialog = null)} />
 {/if}
 
 <style>
@@ -121,7 +177,31 @@
     overflow-y: auto;
     padding: 0 16px 16px;
   }
+  .board {
+    display: flex;
+    align-items: flex-start;
+  }
+  .addproj {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: none;
+    margin-left: 6px;
+    padding: 9px 12px;
+    border: 1px dashed #c9c4b9;
+    border-radius: 10px;
+    background: none;
+    color: #8a8a8a;
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .addproj:hover {
+    color: var(--text);
+    border-color: #9a9a9a;
+  }
   .grid {
+    flex: 1 1 auto;
     display: grid;
     gap: 6px;
     align-items: stretch;

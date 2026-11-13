@@ -70,12 +70,12 @@ describe('collapsing a column', () => {
     expect(strip.style.gridColumn).toBe('2')
   })
 
-  test('the header text is still just the name and contextmenu is not suppressed', async () => {
+  test('the header text is still just the name, and right-click opens the app menu not the browser one', async () => {
     render(Grid)
     const header = screen.getAllByRole('columnheader')[0]
     expect(header.textContent?.trim()).toBe('Twin Pilot')
     const notPrevented = await fireEvent.contextMenu(screen.getByRole('button', { name: 'Twin Pilot' }))
-    expect(notPrevented).toBe(true)
+    expect(notPrevented).toBe(false)
   })
 
   test('ids that are not active projects are ignored and left alone', () => {

@@ -1,17 +1,21 @@
 <script lang="ts">
-  // Small modal asking for a project name. Create mode only for now; Task 15 adds rename.
-  import { onMount, untrack } from 'svelte'
-  import { createProject } from '../lib/api'
+  // Small modal asking for a project name: a new project, or a rename.
+  import { untrack } from 'svelte'
+  import { createProject, patchProject } from '../lib/api'
+  import { dialogFocus } from '../lib/dialog'
   import { refresh } from '../lib/state.svelte'
 
   let {
     mode = 'create',
     initialName = '',
+    projectId,
     position,
     onClose,
   }: {
-    mode?: 'create'
+    mode?: 'create' | 'rename'
     initialName?: string
+    /** The project being renamed (rename mode). */
+    projectId?: string
     /** Where to insert the new project; omitted means at the end. */
     position?: number
     onClose: () => void
@@ -20,9 +24,6 @@
   let name = $state(untrack(() => initialName))
   let error = $state<string | null>(null)
   let busy = $state(false)
-  let input: HTMLInputElement | undefined = $state()
-
-  onMount(() => input?.focus())
 
   async function submit(e: SubmitEvent) {
     e.preventDefault()
@@ -31,7 +32,11 @@
     busy = true
     error = null
     try {
-      await createProject(trimmed, position)
+      if (mode === 'rename' && projectId) {
+        if (trimmed !== initialName) await patchProject(projectId, { name: trimmed })
+      } else {
+        await createProject(trimmed, position)
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err)
       busy = false
@@ -40,33 +45,26 @@
     onClose()
     void refresh()
   }
-
-  function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      onClose()
-    }
-  }
 </script>
 
-<svelte:window {onkeydown} />
-
 <div class="backdrop">
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title"
+    use:dialogFocus={{ onEscape: onClose }}
+  >
     <form onsubmit={submit}>
-      <h2 id="project-name-title">New project</h2>
+      <h2 id="project-name-title">{mode === 'rename' ? 'Rename project' : 'New project'}</h2>
       <label for="project-name">Project name</label>
       <input
         id="project-name"
         type="text"
         bind:value={name}
-        bind:this={input}
+        data-autofocus
         autocomplete="off"
       />
       {#if error}<p class="error" role="alert">{error}</p>{/if}
       <div class="actions">
         <button type="button" class="btn" onclick={onClose}>Cancel</button>
-        <button type="submit" class="btn primary" disabled={busy}>Create</button>
+        <button type="submit" class="btn primary" disabled={busy}>{mode === 'rename' ? 'Rename' : 'Create'}</button>
       </div>
     </form>
   </div>
