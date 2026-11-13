@@ -9,10 +9,47 @@ from .config import AppSettings, RuntimeOptions, default_config_path
 from .config import save_settings as write_settings
 from .events import EventBus
 from .inbox import process_inbox
-from .models import utcnow
+from .models import Project, utcnow
 from .store.notes import NotesRepository
 from .store.projects import ProjectRepository
 from .store.tasks import FileProblem, TaskRepository
+
+
+PROJECTS_UNREADABLE = "projects.json can't be read — fix it or move it aside"
+
+
+class GuardedProjectRepository(ProjectRepository):
+    """Refuses every write while projects.json is unreadable, so it is never overwritten."""
+
+    def _guard(self) -> None:
+        try:
+            self._load()
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise ValueError(PROJECTS_UNREADABLE) from e
+
+    def create(self, *args, **kwargs):
+        self._guard()
+        return super().create(*args, **kwargs)
+
+    def rename(self, *args, **kwargs):
+        self._guard()
+        return super().rename(*args, **kwargs)
+
+    def set_colour(self, *args, **kwargs):
+        self._guard()
+        return super().set_colour(*args, **kwargs)
+
+    def move(self, *args, **kwargs):
+        self._guard()
+        return super().move(*args, **kwargs)
+
+    def close(self, *args, **kwargs):
+        self._guard()
+        return super().close(*args, **kwargs)
+
+    def reopen(self, *args, **kwargs):
+        self._guard()
+        return super().reopen(*args, **kwargs)
 
 
 class AppContext:
@@ -29,13 +66,21 @@ class AppContext:
     def _build_repositories(self) -> None:
         d = Path(self.settings.data_dir)
         self.tasks = TaskRepository(d)
-        self.projects = ProjectRepository(d)
+        self.projects = GuardedProjectRepository(d)
         self.notes = NotesRepository(d)
+
+    def read_projects(self) -> tuple[list[Project], FileProblem | None]:
+        """All projects, or ([], problem) if projects.json is unreadable."""
+        try:
+            return self.projects.list(), None
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            return [], FileProblem("projects.json", str(e))
 
     def refresh(self) -> None:
         """Process the inbox, rescan tasks and tell browsers something changed."""
         with self.lock:
-            active = self.projects.active()
+            projects, _ = self.read_projects()
+            active = [p for p in projects if p.status == "active"]
             result = process_inbox(Path(self.settings.data_dir), self.tasks, active, utcnow())
             self.inbox_problems = result.problems
             self.tasks.scan(active)

@@ -16,9 +16,9 @@ def health() -> dict:
 def state(request: Request) -> dict:
     ctx = request.app.state.ctx
     with ctx.lock:
-        projects = ctx.projects.list()
+        projects, projects_problem = ctx.read_projects()
         scan = ctx.tasks.scan([p for p in projects if p.status == "active"])
-        problems = [*scan.problems, *ctx.inbox_problems]
+        problems = [*([projects_problem] if projects_problem else []), *scan.problems, *ctx.inbox_problems]
         return {
             "projects": [p.model_dump(mode="json") for p in projects],
             "tasks": [t.model_dump(mode="json") for t in scan.tasks],

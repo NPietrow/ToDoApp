@@ -35,3 +35,29 @@ def test_state_includes_problems_and_inbox(client, tmp_path):
     s = client.get("/api/state").json()
     assert [t["title"] for t in s["tasks"]] == ["From inbox"]
     assert [p["file"] for p in s["problems"]] == ["tasks/broken.json"]
+
+
+def test_corrupt_projects_file_is_reported_not_fatal(make_client, tmp_path):
+    (tmp_path / "data").mkdir()
+    bad = tmp_path / "data" / "projects.json"
+    bad.write_bytes(b"{not json")
+    c = make_client()  # startup must survive
+    s = c.get("/api/state")
+    assert s.status_code == 200
+    body = s.json()
+    assert body["projects"] == []
+    assert [p["file"] for p in body["problems"]] == ["projects.json"]
+    assert bad.read_bytes() == b"{not json"
+    # writes are refused and the file is untouched
+    ctx = c.app.state.ctx
+    try:
+        ctx.projects.create("X")
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "projects.json" in str(e)
+    assert bad.read_bytes() == b"{not json"
+    # fixing the file clears the problem
+    bad.write_text('{"schema_version": 1, "projects": []}')
+    ctx.refresh()
+    assert c.get("/api/state").json()["problems"] == []
+    assert ctx.projects.create("X").name == "X"
