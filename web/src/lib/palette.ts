@@ -17,3 +17,8 @@ export const PALETTE: Record<string, PaletteEntry> = {
   sand: { tint: '#f3eee6', header: '#e6dccd', accent: '#a8916d' },
   aqua: { tint: '#e2f2f7', header: '#c8e5ee', accent: '#4f9fb8' },
 }
+
+/** A project's colours; an unknown key (e.g. a hand-edited file) falls back to the first entry. */
+export function colourOf(key: string | undefined): PaletteEntry {
+  return (key !== undefined && PALETTE[key]) || PALETTE.sage
+}

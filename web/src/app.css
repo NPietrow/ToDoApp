@@ -23,3 +23,29 @@ body {
   font-size: var(--base-size);
   margin: 0;
 }
+
+html,
+body {
+  height: 100%;
+}
+
+/* Pill buttons (top bar, dialogs, empty state). */
+.btn {
+  padding: 4px 12px;
+  border: 1px solid #e3e0da;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.primary {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
