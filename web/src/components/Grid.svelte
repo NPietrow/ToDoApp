@@ -1,10 +1,12 @@
 <script lang="ts">
   // The Grid: active projects as columns (by position), task types as rows, then Notes.
   // With no active projects it shows the empty board instead.
+  import { toggleRow } from '../lib/collapse'
   import { colourOf } from '../lib/palette'
   import { app } from '../lib/state.svelte'
   import { linkify } from '../lib/text'
-  import { TASK_TYPES } from '../lib/types'
+  import { TASK_TYPES, type RowKey } from '../lib/types'
+  import CollapsedColumn from './CollapsedColumn.svelte'
   import GridCell from './GridCell.svelte'
   import ProjectHeader from './ProjectHeader.svelte'
   import ProjectNameDialog from './ProjectNameDialog.svelte'
@@ -12,9 +14,26 @@
   const projects = $derived(
     app.projects.filter((p) => p.status === 'active').sort((a, b) => a.position - b.position),
   )
+  // Ids in collapsed_projects that aren't active projects collapse nothing.
+  const collapsedIds = $derived(new Set(app.settings.collapsed_projects))
+  const isCollapsed = (id: string) => collapsedIds.has(id)
+  const expanded = $derived(projects.filter((p) => !isCollapsed(p.id)))
   const columns = $derived(
-    `var(--label-w, 90px) repeat(${projects.length}, minmax(200px, 1fr))`,
+    'var(--label-w, 90px) ' +
+      projects.map((p) => (isCollapsed(p.id) ? '38px' : 'minmax(200px, 1fr)')).join(' '),
   )
+  const rowCount = TASK_TYPES.length + 2 // header, task types, Notes
+
+  const collapsedRows = $derived(new Set<RowKey>(app.settings.collapsed_rows))
+
+  function openCount(projectId: string, type: string): number {
+    return app.tasks.filter(
+      (t) => t.project_id === projectId && t.task_type === type && t.status !== 'done',
+    ).length
+  }
+  function noteCount(projectId: string): number {
+    return (app.notes[projectId] ?? '').split('\n').filter((l) => l.trim() !== '').length
+  }
 
   let creating = $state(false)
 </script>
@@ -31,31 +50,57 @@
     <div class="grid" role="grid" aria-label="Grid" style:grid-template-columns={columns}>
       <div role="row" style="display:contents">
         <div class="corner"></div>
-        {#each projects as project (project.id)}
+        {#each expanded as project (project.id)}
           <ProjectHeader {project} />
+        {/each}
+        <!-- Collapsed columns: one strip each, placed explicitly; the other cells flow around it. -->
+        {#each projects as project, i (project.id)}
+          {#if isCollapsed(project.id)}
+            <CollapsedColumn {project} column={i + 2} rows={rowCount} />
+          {/if}
         {/each}
       </div>
 
       {#each TASK_TYPES as type (type.key)}
         <div role="row" aria-label={type.label} style="display:contents">
-          <div class="rl" role="rowheader">{type.label}</div>
-          {#each projects as project (project.id)}
-            <GridCell projectId={project.id} taskType={type.key} />
+          <div class="rl" role="rowheader">
+            <button type="button" class="rlb" onclick={() => toggleRow(type.key)}>{type.label}</button>
+          </div>
+          {#each expanded as project (project.id)}
+            {#if collapsedRows.has(type.key)}
+              <div class="cell bar" role="gridcell" style:background={colourOf(project.colour).tint}>
+                <button type="button" class="barb" onclick={() => toggleRow(type.key)}
+                  >{openCount(project.id, type.key)} open</button
+                >
+              </div>
+            {:else}
+              <GridCell projectId={project.id} taskType={type.key} />
+            {/if}
           {/each}
         </div>
       {/each}
 
       <!-- Read-only for now: Task 17 replaces these cells with the editable NotesCell. -->
       <div role="row" aria-label="Notes" style="display:contents">
-        <div class="rl" role="rowheader">Notes</div>
-        {#each projects as project (project.id)}
-          <div class="cell notes" role="gridcell" style:background={colourOf(project.colour).tint}>
-            {#each linkify(app.notes[project.id] ?? '') as seg, i (i)}
-              {#if seg.kind === 'link'}
-                <a href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a>
-              {:else}{seg.text}{/if}
-            {/each}
-          </div>
+        <div class="rl" role="rowheader">
+          <button type="button" class="rlb" onclick={() => toggleRow('notes')}>Notes</button>
+        </div>
+        {#each expanded as project (project.id)}
+          {#if collapsedRows.has('notes')}
+            <div class="cell bar" role="gridcell" style:background={colourOf(project.colour).tint}>
+              <button type="button" class="barb" onclick={() => toggleRow('notes')}
+                >{noteCount(project.id)} notes</button
+              >
+            </div>
+          {:else}
+            <div class="cell notes" role="gridcell" style:background={colourOf(project.colour).tint}>
+              {#each linkify(app.notes[project.id] ?? '') as seg, i (i)}
+                {#if seg.kind === 'link'}
+                  <a href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a>
+                {:else}{seg.text}{/if}
+              {/each}
+            </div>
+          {/if}
         {/each}
       </div>
     </div>
@@ -110,6 +155,31 @@
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+  .rlb {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  .bar {
+    min-height: 0;
+    padding: 0;
+  }
+  .barb {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    background: none;
+    color: #555;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
   .cell {
     min-width: 0;

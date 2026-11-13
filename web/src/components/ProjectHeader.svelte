@@ -1,5 +1,6 @@
 <script lang="ts">
-  // A project's column header. Task 13 makes it collapse the column, Task 15 adds its menu.
+  // A project's column header. Clicking the name collapses the column; Task 15 adds its menu.
+  import { toggleProject } from '../lib/collapse'
   import { colourOf } from '../lib/palette'
   import type { Project } from '../lib/types'
 
@@ -7,10 +8,24 @@
 </script>
 
 <div class="ph" role="columnheader" style:background={colourOf(project.colour).header}>
-  {project.name}
+  <button type="button" class="name" aria-expanded="true" onclick={() => toggleProject(project.id)}>
+    {project.name}
+  </button>
 </div>
 
 <style>
+  .name {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
   .ph {
     position: sticky;
     top: 0;

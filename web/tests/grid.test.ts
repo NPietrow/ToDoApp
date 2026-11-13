@@ -102,7 +102,7 @@ describe('Grid', () => {
     const { container } = render(Grid)
     const grid = screen.getByRole('grid')
     expect(grid.getAttribute('style')).toContain(
-      'grid-template-columns: var(--label-w, 90px) repeat(2, minmax(200px, 1fr))',
+      'grid-template-columns: var(--label-w, 90px) minmax(200px, 1fr) minmax(200px, 1fr)',
     )
     for (const cell of screen.getAllByRole('gridcell')) {
       expect(cell.style.overflow).toBe('')

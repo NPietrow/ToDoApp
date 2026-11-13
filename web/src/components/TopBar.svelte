@@ -1,6 +1,7 @@
 <script lang="ts">
   // View tabs on the left, Grid actions on the right.
   import { patchSettings } from '../lib/api'
+  import { collapseAll, expandAll } from '../lib/collapse'
   import { app } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
 
@@ -28,8 +29,20 @@
 
   <div class="actions">
     <!-- Later tasks add their top-bar buttons here, before Show completed:
-         Expand all / Collapse all (Task 13); Paste tasks, the Unsorted and problems badges,
-         and Settings (Task 17). -->
+         Paste tasks, the Unsorted and problems badges, and Settings (Task 17). -->
+    <button type="button" class="btn" onclick={expandAll}>Expand all</button>
+    <button
+      type="button"
+      class="btn"
+      onclick={() =>
+        collapseAll(
+          app.projects
+            .filter((p) => p.status === 'active')
+            .sort((a, b) => a.position - b.position)
+            .map((p) => p.id),
+        )}
+      >Collapse all</button
+    >
     <button
       type="button"
       class="btn"
