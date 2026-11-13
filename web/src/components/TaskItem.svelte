@@ -21,6 +21,16 @@
     pending = null
   })
 
+  function dragStart(e: DragEvent) {
+    // Only the card itself drags; the tick box (and anything inside the card) never starts one.
+    if ((e.target as HTMLElement).closest('.bx')) {
+      e.preventDefault()
+      return
+    }
+    e.dataTransfer?.setData('text/x-task-id', task.id)
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+  }
+
   async function toggle(e: MouseEvent) {
     e.stopPropagation()
     const next = !done
@@ -37,9 +47,11 @@
   }
 </script>
 
-<div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}>
+<div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}
+  draggable="true" ondragstart={dragStart} role="group"
+>
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
-    onclick={toggle}
+    draggable="false" onclick={toggle}
   ></button>
   <span class="body">
     <span class="title">{task.title}</span>
