@@ -166,18 +166,16 @@
     text-transform: inherit;
     cursor: pointer;
   }
-  .bar {
-    min-height: 0;
-    padding: 0;
-  }
   .barb {
     display: block;
     width: 100%;
-    padding: 6px 10px;
+    padding: 4px 10px;
     border: 0;
     background: none;
     color: #555;
     font: inherit;
+    font-size: 0.84em;
+    line-height: 1.3;
     text-align: left;
     cursor: pointer;
   }
@@ -186,6 +184,11 @@
     min-height: 40px;
     padding: 6px 8px;
     box-sizing: border-box;
+  }
+  /* After .cell, and more specific, so the slim bar beats the cell's min-height and padding. */
+  .cell.bar {
+    min-height: 0;
+    padding: 0;
   }
   .notes {
     padding: 6px 10px;
