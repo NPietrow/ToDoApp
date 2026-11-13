@@ -1,0 +1,109 @@
+import type {
+  AppState,
+  ImportResult,
+  PreviewResult,
+  Project,
+  ProjectChanges,
+  Settings,
+  Task,
+  TaskChanges,
+  TaskType,
+} from './types'
+
+export const eventsUrl = '/api/events'
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+/** The server's `detail`: a string, or FastAPI's list of validation errors. */
+function detailMessage(detail: unknown): string | null {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (d && typeof d === 'object' ? (d as { msg?: unknown }).msg : undefined))
+      .filter((m): m is string => typeof m === 'string')
+    if (msgs.length) return msgs.join('; ')
+  }
+  return null
+}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const init: RequestInit = { method, credentials: 'same-origin' }
+  if (body !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' }
+    init.body = JSON.stringify(body)
+  }
+  const res = await fetch(path, init)
+  if (!res.ok) {
+    let message: string | null = null
+    try {
+      message = detailMessage((await res.json()).detail)
+    } catch {
+      // not JSON: fall through to the status text
+    }
+    throw new ApiError(res.status, message ?? (res.statusText || `HTTP ${res.status}`))
+  }
+  if (res.status === 204) return undefined as T
+  return (await res.json()) as T
+}
+
+const enc = encodeURIComponent
+
+export const getState = () => request<AppState>('GET', '/api/state')
+
+export const createTask = (title: string, projectId: string | null, taskType: TaskType) =>
+  request<Task>('POST', '/api/tasks', { title, project_id: projectId, task_type: taskType })
+
+export const patchTask = (id: string, changes: TaskChanges) =>
+  request<Task>('PATCH', `/api/tasks/${enc(id)}`, changes)
+
+export const setDone = (id: string, done: boolean) =>
+  request<Task>('POST', `/api/tasks/${enc(id)}/done`, { done })
+
+/** projectId null moves the task to Unsorted. Resolves to the destination cell's tasks. */
+export const moveTask = (id: string, projectId: string | null, taskType: TaskType, index: number) =>
+  request<Task[]>('POST', `/api/tasks/${enc(id)}/move`, {
+    project_id: projectId,
+    task_type: taskType,
+    index,
+  })
+
+export const deleteTask = (id: string) => request<void>('DELETE', `/api/tasks/${enc(id)}`)
+
+export const restoreTask = (id: string) => request<Task>('POST', `/api/tasks/${enc(id)}/restore`)
+
+export const emptyTrash = () => request<{ removed: number }>('POST', '/api/trash/empty')
+
+export const createProject = (name: string, position?: number) =>
+  request<Project>('POST', '/api/projects', { name, position: position ?? null })
+
+export const patchProject = (id: string, changes: ProjectChanges) =>
+  request<Project>('PATCH', `/api/projects/${enc(id)}`, changes)
+
+export const moveProject = (id: string, position: number) =>
+  request<Project[]>('POST', `/api/projects/${enc(id)}/move`, { position })
+
+export const closeProject = (id: string, moveOpenTo: string | null) =>
+  request<Project>('POST', `/api/projects/${enc(id)}/close`, { move_open_to: moveOpenTo ?? null })
+
+export const reopenProject = (id: string) =>
+  request<Project>('POST', `/api/projects/${enc(id)}/reopen`)
+
+export const putNotes = (projectId: string, text: string) =>
+  request<void>('PUT', `/api/notes/${enc(projectId)}`, { text })
+
+export const previewIntake = (text: string) =>
+  request<PreviewResult>('POST', '/api/intake/preview', { text })
+
+export const importIntake = (text: string) =>
+  request<ImportResult>('POST', '/api/intake/import', { text })
+
+export const patchSettings = (changes: Partial<Settings>) =>
+  request<Settings>('PATCH', '/api/settings', changes)
