@@ -55,7 +55,9 @@ def create_app(
     config_path: Path | None = None,
     overrides: dict[str, object] | None = None,
     watch: bool = True,
+    static_dir: Path | None = None,
 ) -> FastAPI:
+    static_dir = STATIC_DIR if static_dir is None else static_dir
     ctx = AppContext(settings, runtime, config_path, overrides)
     settings = ctx.settings
 
@@ -80,6 +82,12 @@ def create_app(
     app.include_router(events_api.router)
     for module in (tasks_api, projects_api, notes_api, intake_api):
         app.include_router(module.router)
-    if STATIC_DIR.is_dir():  # mounted last so it never shadows /api
-        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    @app.api_route(
+        "/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False
+    )
+    async def _unknown_api(path: str) -> JSONResponse:
+        return JSONResponse({"detail": "not found"}, status_code=404)
+
+    if static_dir.is_dir():  # mounted last so it never shadows /api
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
     return app
