@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / web build
+node_modules/
+server/todoapp/static/
+web/test-results/
+web/playwright-report/
+
+# Packaging output
+build/
+dist/
+
+# Scratch and tooling
+.superpowers/
+.scratch-data/
