@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import Grid from './components/Grid.svelte'
+  import Toast from './components/Toast.svelte'
   import TopBar from './components/TopBar.svelte'
   import { app, connectEvents, refresh, startDayWatch } from './lib/state.svelte'
   import type { TextSize } from './lib/types'
@@ -34,6 +35,7 @@
 {:else}
   <p class="loading">Loading…</p>
 {/if}
+<Toast />
 
 <style>
   .app {

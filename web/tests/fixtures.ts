@@ -76,6 +76,9 @@ export const TASKS: Task[] = [
   }),
 ]
 
+/** A plain open task, for tests that need one task without the whole fixture. */
+export const TASK: Task = makeTask({ id: 't-new', title: 'Chase Sam', task_type: 'quick' })
+
 export function fixtureState(): AppState {
   return structuredClone({
     projects: PROJECTS,

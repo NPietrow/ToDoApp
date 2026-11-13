@@ -1,18 +1,45 @@
 <script lang="ts">
-  // One task card in a Grid cell. The tick box and title only display here: Task 12 wires
-  // ticking, Task 16 opens the pop-up on click. The project's accent comes from the
-  // enclosing cell's --accent custom property.
+  // One task card in a Grid cell. The tick box is wired here; Task 16 opens the pop-up on
+  // a click elsewhere on the card. The project's accent comes from the enclosing cell's
+  // --accent custom property.
+  import { setDone } from '../lib/api'
   import { formatDue, isToday } from '../lib/dates'
-  import { app } from '../lib/state.svelte'
+  import { app, refresh } from '../lib/state.svelte'
+  import { showToast } from '../lib/toast.svelte'
   import type { Task } from '../lib/types'
 
   let { task }: { task: Task } = $props()
 
-  const done = $derived(task.status === 'done')
+  // Ticking shows at once: `pending` holds the tick until the task itself changes (the
+  // refresh arrives) or the server refuses it.
+  let pending: boolean | null = $state(null)
+  const done = $derived(pending ?? task.status === 'done')
+
+  $effect(() => {
+    void task.status
+    void task.updated_at
+    pending = null
+  })
+
+  async function toggle(e: MouseEvent) {
+    e.stopPropagation()
+    const next = !done
+    pending = next
+    try {
+      await setDone(task.id, next)
+    } catch (err) {
+      pending = null
+      const reason = err instanceof Error ? err.message : String(err)
+      showToast({ message: `Couldn't update task: ${reason}` })
+      return
+    }
+    void refresh()
+  }
 </script>
 
 <div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}>
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
+    onclick={toggle}
   ></button>
   <span class="body">
     <span class="title">{task.title}</span>

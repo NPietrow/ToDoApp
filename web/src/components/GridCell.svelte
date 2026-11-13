@@ -1,9 +1,10 @@
 <script lang="ts">
-  // One project × task type cell: the visible tasks, in `order`. Task 12 adds the "+ add" line.
+  // One project × task type cell: the visible tasks, in `order`. Ends with the "+ add" line.
   import { isVisibleOnGrid } from '../lib/dates'
   import { colourOf } from '../lib/palette'
   import { app } from '../lib/state.svelte'
   import type { TaskType } from '../lib/types'
+  import AddLine from './AddLine.svelte'
   import TaskItem from './TaskItem.svelte'
 
   let { projectId, taskType }: { projectId: string; taskType: TaskType } = $props()
@@ -25,6 +26,7 @@
   {#each tasks as task (task.id)}
     <TaskItem {task} />
   {/each}
+  <AddLine {projectId} {taskType} />
 </div>
 
 <style>
