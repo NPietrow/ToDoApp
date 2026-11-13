@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "todoapp"
+version = "0.1.0"
+description = "Local to-do board that stores one JSON file per task"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic>=2",
+    "watchdog",
+    "platformdirs",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+windows = ["pystray", "Pillow", "pywin32; sys_platform == 'win32'"]
+
+[tool.setuptools.packages.find]
+include = ["todoapp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
