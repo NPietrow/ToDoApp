@@ -22,16 +22,21 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     config_path = args.config if args.config is not None else default_config_path()
-    settings = load_settings(config_path)
-    overrides: dict[str, object] = {}
+    base = load_settings(config_path, env={})  # the saved settings, no env applied
+    with_env = load_settings(config_path)
+    overrides: dict[str, object] = {
+        k: getattr(with_env, k)
+        for k in ("data_dir", "port")
+        if getattr(with_env, k) != getattr(base, k)
+    }
     if args.data_dir is not None:
         overrides["data_dir"] = args.data_dir
     if args.port is not None:
         overrides["port"] = args.port
-    if overrides:  # applies to this run only; never saved
-        settings = settings.model_copy(update=overrides)
+    # Env and CLI overrides apply to this run only; they are never saved.
     runtime = runtime_options()
-    app = create_app(settings, runtime, config_path)
+    app = create_app(base, runtime, config_path, overrides)
+    settings = app.state.ctx.settings
     if not args.no_browser:
         url = f"http://127.0.0.1:{settings.port}/"
         threading.Timer(1.0, webbrowser.open, args=(url,)).start()

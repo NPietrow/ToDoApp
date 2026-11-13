@@ -45,9 +45,13 @@ def _add_error_handlers(app: FastAPI) -> None:
 
 
 def create_app(
-    settings: AppSettings, runtime: RuntimeOptions, config_path: Path | None = None
+    settings: AppSettings,
+    runtime: RuntimeOptions,
+    config_path: Path | None = None,
+    overrides: dict[str, object] | None = None,
 ) -> FastAPI:
-    ctx = AppContext(settings, runtime, config_path)
+    ctx = AppContext(settings, runtime, config_path, overrides)
+    settings = ctx.settings
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

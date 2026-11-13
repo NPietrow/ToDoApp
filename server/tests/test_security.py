@@ -53,3 +53,20 @@ def test_get_without_origin_allowed(client):
 def test_no_cors_headers(client):
     r = client.get("/api/health", headers={"Origin": "https://evil.example"})
     assert not any(k.lower().startswith("access-control-") for k in r.headers)
+
+
+def test_unknown_scope_type_is_refused():
+    import asyncio
+
+    from todoapp.security import LocalOnlyMiddleware
+
+    called = []
+
+    async def inner(scope, receive, send):
+        called.append(scope["type"])
+
+    mw = LocalOnlyMiddleware(inner, {8765})
+    asyncio.run(mw({"type": "bogus", "headers": [(b"host", b"127.0.0.1:8765")]}, None, None))
+    assert called == []
+    asyncio.run(mw({"type": "lifespan"}, None, None))
+    assert called == ["lifespan"]

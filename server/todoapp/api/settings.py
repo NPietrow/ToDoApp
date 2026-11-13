@@ -20,7 +20,10 @@ def patch_settings(request: Request, patch: dict) -> dict:
     with ctx.lock:
         old = ctx.settings
         try:
-            new = AppSettings.model_validate({**old.model_dump(), **patch})
+            base = AppSettings.model_validate({**ctx.saved_settings.model_dump(), **patch})
+            # A key the user sets explicitly stops being a run override.
+            overrides = {k: v for k, v in ctx.overrides.items() if k not in patch}
+            new = ctx.effective(base, overrides)
         except ValidationError as e:
             raise HTTPException(
                 422, jsonable_encoder(e.errors(include_url=False, include_context=False, include_input=False))
@@ -32,6 +35,8 @@ def patch_settings(request: Request, patch: dict) -> dict:
                 raise HTTPException(422, f"cannot use that folder: {e}") from e
         # A changed port is saved and takes effect on the next start.
         # Task 18 wires start_at_login to launcher.startup here when runtime.windows_app.
+        ctx.saved_settings = base
+        ctx.overrides = overrides
         ctx.settings = new
         ctx.save_settings()
         return ctx.settings.model_dump(mode="json")

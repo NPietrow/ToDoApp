@@ -44,8 +44,10 @@ class LocalOnlyMiddleware:
         await send({"type": "http.response.body", "body": body})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] not in ("http", "websocket"):  # lifespan
+        if scope["type"] == "lifespan":
             await self.app(scope, receive, send)
+            return
+        if scope["type"] not in ("http", "websocket"):  # unknown scope: refuse
             return
         host = (self._header(scope, b"host") or "").strip().lower()
         if host not in self.hosts:

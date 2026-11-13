@@ -53,8 +53,18 @@ class GuardedProjectRepository(ProjectRepository):
 
 
 class AppContext:
-    def __init__(self, settings: AppSettings, runtime: RuntimeOptions, config_path: Path | None = None):
-        self.settings = settings
+    def __init__(
+        self,
+        settings: AppSettings,
+        runtime: RuntimeOptions,
+        config_path: Path | None = None,
+        overrides: dict[str, object] | None = None,
+    ):
+        # `settings` is the saved base; `overrides` (CLI/env) apply to this run only
+        # and are never written to the settings file.
+        self.saved_settings = settings
+        self.overrides: dict[str, object] = dict(overrides or {})
+        self.settings = self.effective(settings, self.overrides)
         self.runtime = runtime
         self.config_path = config_path if config_path is not None else default_config_path()
         self.bus = EventBus()
@@ -62,6 +72,10 @@ class AppContext:
         self.lock = threading.RLock()
         self.inbox_problems: list[FileProblem] = []
         self._build_repositories()
+
+    @staticmethod
+    def effective(base: AppSettings, overrides: dict[str, object]) -> AppSettings:
+        return AppSettings.model_validate({**base.model_dump(), **overrides})
 
     def _build_repositories(self) -> None:
         d = Path(self.settings.data_dir)
@@ -80,9 +94,14 @@ class AppContext:
         """Process the inbox, rescan tasks and tell browsers something changed."""
         with self.lock:
             projects, _ = self.read_projects()
+            projects, problem = self.read_projects()
             active = [p for p in projects if p.status == "active"]
-            result = process_inbox(Path(self.settings.data_dir), self.tasks, active, utcnow())
-            self.inbox_problems = result.problems
+            if problem is None:
+                result = process_inbox(Path(self.settings.data_dir), self.tasks, active, utcnow())
+                self.inbox_problems = result.problems
+            else:
+                # Hold the inbox: importing now would lose project assignments.
+                self.inbox_problems = []
             self.tasks.scan(active)
         self.bus.publish("changed")
 
@@ -97,4 +116,4 @@ class AppContext:
 
     def save_settings(self) -> None:
         with self.lock:
-            write_settings(self.settings, self.config_path)
+            write_settings(self.saved_settings, self.config_path)

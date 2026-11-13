@@ -61,3 +61,39 @@ def test_corrupt_projects_file_is_reported_not_fatal(make_client, tmp_path):
     ctx.refresh()
     assert c.get("/api/state").json()["problems"] == []
     assert ctx.projects.create("X").name == "X"
+
+
+def test_patch_does_not_save_run_overrides(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from todoapp.app import create_app
+    from todoapp.config import AppSettings, RuntimeOptions
+
+    cfg = tmp_path / "config" / "settings.json"
+    over = {"data_dir": tmp_path / "once", "port": 8799}
+    app = create_app(AppSettings(data_dir=tmp_path / "saved"), RuntimeOptions(), cfg, over)
+    origin = "http://127.0.0.1:8799"
+    with TestClient(app, base_url=origin, headers={"Origin": origin}) as c:
+        assert c.get("/api/state").json()["settings"]["port"] == 8799
+        r = c.patch("/api/settings", json={"text_size": "large"})
+        assert r.json()["port"] == 8799 and r.json()["data_dir"] == str(tmp_path / "once")
+        saved = json.loads(cfg.read_text())
+        assert saved["text_size"] == "large"
+        assert saved["port"] == 8765 and saved["data_dir"] == str(tmp_path / "saved")
+        # an explicit data_dir in the patch is saved and ends that override
+        c.patch("/api/settings", json={"data_dir": str(tmp_path / "chosen")})
+        assert json.loads(cfg.read_text())["data_dir"] == str(tmp_path / "chosen")
+        assert c.app.state.ctx.settings.data_dir == tmp_path / "chosen"
+
+
+def test_inbox_held_while_projects_unreadable(make_client, tmp_path):
+    (tmp_path / "data/inbox").mkdir(parents=True)
+    (tmp_path / "data/projects.json").write_text("{bad")
+    f = tmp_path / "data/inbox/a.json"
+    f.write_text('{"title": "Keep me", "project": "Alpha"}')
+    c = make_client()
+    assert f.exists() and c.get("/api/state").json()["tasks"] == []
+    (tmp_path / "data/projects.json").write_text('{"schema_version": 1, "projects": []}')
+    c.app.state.ctx.refresh()
+    assert not f.exists()
+    assert [t["title"] for t in c.get("/api/state").json()["tasks"]] == ["Keep me"]
