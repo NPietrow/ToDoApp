@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://todoapp.local/intake.schema.json",
+  "title": "ToDoApp intake format",
+  "description": "One task, an object with a \"tasks\" array, or a bare array of tasks.",
+  "oneOf": [
+    { "$ref": "#/$defs/task" },
+    {
+      "type": "object",
+      "properties": { "tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } } },
+      "required": ["tasks"]
+    },
+    { "type": "array", "items": { "$ref": "#/$defs/task" } }
+  ],
+  "$defs": {
+    "task": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "description": "What needs doing." },
+        "project": { "type": "string", "description": "Project name, matched case-insensitively against active projects. No match means the task goes to Unsorted." },
+        "project_id": { "type": "string", "description": "Project UUID. Wins over project if it matches an active project." },
+        "description": { "type": "string" },
+        "task_type": { "enum": ["urgent", "quick", "general", "objective"], "default": "general" },
+        "due_date": { "type": "string", "format": "date", "description": "YYYY-MM-DD." },
+        "status": { "enum": ["not_started", "in_progress", "blocked", "done"], "default": "not_started" }
+      },
+      "required": ["title"]
+    }
+  }
+}
