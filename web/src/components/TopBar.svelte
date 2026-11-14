@@ -22,7 +22,13 @@
     const observer = new ResizeObserver(publish)
     observer.observe(header)
     observer.observe(root)
-    return () => observer.disconnect()
+    // The bar's own width props up the page, so the observed boxes may not change when the window
+    // narrows: follow the window directly as well.
+    window.addEventListener('resize', publish)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', publish)
+    }
   })
 
   async function toggleShowCompleted() {

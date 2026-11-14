@@ -326,6 +326,28 @@ describe('TopBar pinning', () => {
   })
 })
 
+describe('TopBar width follows the window', () => {
+  test('a window resize republishes --vw, and the listener goes on destroy', () => {
+    const root = document.documentElement
+    const width = vi.spyOn(root, 'clientWidth', 'get').mockReturnValue(1351)
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const { unmount } = render(TopBar)
+    expect(root.style.getPropertyValue('--vw')).toBe('1351px')
+
+    width.mockReturnValue(985)
+    window.dispatchEvent(new Event('resize'))
+    expect(root.style.getPropertyValue('--vw')).toBe('985px')
+
+    unmount()
+    expect(remove).toHaveBeenCalledWith('resize', expect.any(Function))
+    width.mockReturnValue(500)
+    window.dispatchEvent(new Event('resize'))
+    expect(root.style.getPropertyValue('--vw')).toBe('985px')
+    root.style.removeProperty('--topbar-h')
+    root.style.removeProperty('--vw')
+  })
+})
+
 describe('ProjectNameDialog', () => {
   test('Enter creates the project, then closes and refreshes', async () => {
     const create = vi
