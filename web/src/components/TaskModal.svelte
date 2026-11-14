@@ -35,6 +35,7 @@
   let titleEl: HTMLInputElement | undefined = $state()
   let editing = $state(false)
   let pickerOpen = $state(false)
+  let dueBtn: HTMLButtonElement | undefined = $state()
 
   let pending: TaskChanges = {}
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -152,6 +153,8 @@
 
   function pickDate(day: string | null) {
     pickerOpen = false
+    // The button that was clicked is about to leave the page: keep focus inside the dialog.
+    dueBtn?.focus()
     void save({ due_date: day })
   }
 
@@ -241,7 +244,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions (Esc closes the picker before the pop-up; captured because the dialog listens natively, ahead of Svelte's delegated handlers) -->
         <div class="due" onkeydowncapture={onDueKeydown}>
           <span class="fv">
-            <button type="button" class="pill" aria-expanded={pickerOpen}
+            <button type="button" class="pill" aria-expanded={pickerOpen} bind:this={dueBtn}
               onclick={() => (pickerOpen = !pickerOpen)}
             >{task.due_date ? formatDue(task.due_date, app.today) : 'No date'}</button>
             {#if task.due_date}

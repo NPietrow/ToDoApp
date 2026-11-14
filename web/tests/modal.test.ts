@@ -138,6 +138,17 @@ describe('task modal', () => {
     expect(patch).toHaveBeenCalledTimes(1)
   })
 
+  test('after picking Tomorrow focus is on the due button and Escape closes the modal', async () => {
+    setup()
+    render(TaskModal)
+    await user.click(screen.getByRole('button', { name: /no date/i }))
+    await user.click(screen.getByText('Tomorrow'))
+    const due = await screen.findByRole('button', { name: /tomorrow/i })
+    expect(due).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(ui.openTaskId).toBeNull()
+  })
+
   test('Escape closes an open date picker first and leaves the modal open', async () => {
     setup()
     render(TaskModal)
@@ -246,6 +257,21 @@ describe('dialogFocus returnFocus', () => {
     action.destroy()
     expect(fallback).toHaveFocus()
     fallback.remove()
+    node.remove()
+  })
+
+  test('focus lost to the body by removing the focused control returns inside the node', async () => {
+    const node = document.createElement('div')
+    const a = document.createElement('button')
+    const b = document.createElement('button')
+    node.append(a, b)
+    document.body.append(node)
+    const action = dialogFocus(node, { onEscape() {} })
+    b.focus()
+    b.remove()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(a).toHaveFocus()
+    action.destroy()
     node.remove()
   })
 

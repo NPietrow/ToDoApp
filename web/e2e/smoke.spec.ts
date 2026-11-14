@@ -61,10 +61,7 @@ test("capture, tick, open pop-up, set due date", async ({ page }) => {
   await expect(page.locator("[data-task-id]").first()).toHaveClass(/done/);
 });
 
-// KNOWN APP BUG: picking a date removes the focused picker button, focus falls to <body>, and
-// the pop-up's Escape handler (on the dialog element) never sees the key. test.fail() keeps the
-// suite green now and turns red as soon as the bug is fixed, which is the cue to drop test.fail().
-test.fail("Escape closes the pop-up straight after picking a date", async ({ page, request }) => {
+test("Escape closes the pop-up straight after picking a date", async ({ page, request }) => {
   const p = await makeProject(request, "Esc Project");
   await makeTask(request, "Escape me", p.id, "quick");
   await page.goto("/");

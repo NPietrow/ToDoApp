@@ -40,6 +40,22 @@ export function dialogFocus(node: HTMLElement, options: DialogOptions) {
     if (e.target instanceof Node && !node.contains(e.target)) focusables()[0]?.focus()
   }
 
+  // Focus that falls to nothing (the focused control was removed, e.g. a picker closing) would
+  // leave Escape and Tab with no dialog to act on: put it back inside. A window that has lost
+  // focus (alt-tab) is left alone.
+  function rescue() {
+    const at = document.activeElement
+    if (!node.isConnected || !document.hasFocus()) return
+    if (at && at !== document.body && at !== document.documentElement) return
+    ;(node.querySelector<HTMLElement>('[data-autofocus]') ?? focusables()[0])?.focus()
+  }
+  function onfocusout(e: FocusEvent) {
+    if (e.relatedTarget === null) setTimeout(rescue)
+  }
+  const watcher = new MutationObserver(rescue)
+  watcher.observe(node, { childList: true, subtree: true })
+
+  node.addEventListener('focusout', onfocusout)
   node.addEventListener('keydown', onkeydown)
   document.addEventListener('focusin', onfocusin)
   return {
@@ -47,6 +63,8 @@ export function dialogFocus(node: HTMLElement, options: DialogOptions) {
       opts = next
     },
     destroy() {
+      watcher.disconnect()
+      node.removeEventListener('focusout', onfocusout)
       node.removeEventListener('keydown', onkeydown)
       document.removeEventListener('focusin', onfocusin)
       const target = previous?.isConnected ? previous : opts.returnFocus?.()
