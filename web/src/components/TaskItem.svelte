@@ -109,6 +109,14 @@
     padding: 7px 9px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
     line-height: 1.35;
+    cursor: pointer;
+  }
+  /* Hover: a thin ring in the project's accent and a slightly deeper shadow, so the card reads
+     as clickable. Instant, no transition. Also applies to done cards, which keep their grey text. */
+  .t:hover {
+    box-shadow:
+      0 0 0 1px var(--accent, #9a9a9a),
+      0 2px 6px rgba(0, 0, 0, 0.1);
   }
   .body {
     min-width: 0;
