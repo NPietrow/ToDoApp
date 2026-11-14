@@ -60,6 +60,21 @@ def test_processed_and_trash_are_ignored(tmp_path):
         w.stop()
 
 
+def test_removing_a_processed_file_refreshes(tmp_path):
+    # Its skipped-item problems are cleared by the refresh this triggers.
+    (tmp_path / "inbox" / "processed").mkdir(parents=True)
+    f = tmp_path / "inbox" / "processed" / "a.json"
+    f.write_text("{}")
+    calls = []
+    w = DataWatcher(tmp_path, lambda: calls.append(1), debounce_s=0.1)
+    w.start()
+    try:
+        f.unlink()
+        assert wait_for(lambda: len(calls) == 1)
+    finally:
+        w.stop()
+
+
 def test_stop_is_idempotent(tmp_path):
     w = DataWatcher(tmp_path, lambda: None, debounce_s=0.1)
     w.stop()  # before start

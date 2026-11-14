@@ -23,7 +23,7 @@ def state(request: Request) -> dict:
             *([projects_problem] if projects_problem else []),
             *scan.problems,
             *notes_problems,
-            *ctx.inbox_problems,
+            *ctx.all_inbox_problems(),
         ]
         return {
             "projects": [p.model_dump(mode="json") for p in projects],

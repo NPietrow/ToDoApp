@@ -48,20 +48,23 @@ class DataWatcher:
             observer.stop()
             observer.join()
 
+    def _parts(self, p: Path) -> list[str]:
+        try:
+            return [x.lower() for x in p.relative_to(self.data_dir).parts]
+        except ValueError:
+            return [x.lower() for x in p.parts]
+
+    def _in_processed(self, path: str) -> bool:
+        parts = self._parts(Path(path))
+        return any(part == "inbox" and parts[i + 1] == "processed" for i, part in enumerate(parts[:-1]))
+
     def _relevant(self, path: str) -> bool:
         p = Path(path)
         if is_temp_file(p.name):
             return False
-        try:
-            parts = [x.lower() for x in p.relative_to(self.data_dir).parts]
-        except ValueError:
-            parts = [x.lower() for x in p.parts]
-        if ".trash" in parts:
+        if ".trash" in self._parts(p):
             return False
-        for i, part in enumerate(parts[:-1]):
-            if part == "inbox" and parts[i + 1] == "processed":
-                return False
-        return True
+        return not self._in_processed(path)
 
     def _poke(self) -> None:
         with self._lock:
@@ -91,4 +94,7 @@ class _Handler(FileSystemEventHandler):
             return
         paths = [event.src_path, getattr(event, "dest_path", "")]
         if any(p and self._w._relevant(str(p)) for p in paths):
+            self._w._poke()
+        elif event.event_type in ("deleted", "moved") and self._w._in_processed(str(event.src_path)):
+            # A processed file removed or renamed may clear its skipped-item problems.
             self._w._poke()

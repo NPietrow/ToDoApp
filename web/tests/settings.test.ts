@@ -148,6 +148,23 @@ describe('unsorted tray and badges', () => {
     ).toBeInTheDocument()
   })
 
+  test('items skipped from an imported inbox file get their own hint', () => {
+    const IMPORT_HINT =
+      'Imported the valid items; the ones listed were skipped. Remove the processed file to clear this.'
+    const FILE_HINT = 'Fix or remove these files in your data folder. Nothing has been changed.'
+    app.problems = [{ file: 'inbox/processed/20261113-090000-ai.json', error: 'Item 2: missing title' }]
+    const first = render(ProblemsList)
+    expect(screen.getByText(IMPORT_HINT)).toBeInTheDocument()
+    expect(screen.queryByText(FILE_HINT)).toBeNull()
+    first.unmount()
+    app.problems = [...app.problems, { file: 'tasks/a.json', error: 'bad' }]
+    render(ProblemsList)
+    expect(screen.getByText(IMPORT_HINT)).toBeInTheDocument()
+    expect(screen.getByText(FILE_HINT)).toBeInTheDocument()
+    expect(screen.getByText('tasks/a.json')).toBeInTheDocument()
+    expect(screen.getByText('Item 2: missing title')).toBeInTheDocument()
+  })
+
   test('plural problems, and the other buttons open their modals', async () => {
     app.problems = [
       { file: 'a', error: 'x' },

@@ -118,6 +118,25 @@ def test_unreadable_notes_file_is_reported_and_the_board_still_loads(client, tmp
     assert client.put(f"/api/notes/{pid}", json={"text": "ok"}).status_code == 204
 
 
+def test_skipped_inbox_items_survive_refreshes_until_the_processed_file_goes(client, tmp_path):
+    inbox = tmp_path / "data" / "inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "ai.json").write_text('[{"title": "Good"}, {"project": "no title"}]')
+    ctx = client.app.state.ctx
+    ctx.refresh()  # imports and moves the file
+    ctx.refresh()  # the watcher's echo of that import...
+    ctx.refresh()  # ...and any later change
+    s = client.get("/api/state").json()
+    assert [t["title"] for t in s["tasks"]] == ["Good"]
+    [processed] = (inbox / "processed").iterdir()
+    assert [(p["file"], p["error"]) for p in s["problems"]] == [
+        (f"inbox/processed/{processed.name}", "Item 2: missing title")
+    ]
+    processed.unlink()
+    ctx.refresh()
+    assert client.get("/api/state").json()["problems"] == []
+
+
 def test_hand_edited_task_keeps_its_closed_project(client, tmp_path):
     pid = client.post("/api/projects", json={"name": "Old Job"}).json()["id"]
     client.post(f"/api/projects/{pid}/close")

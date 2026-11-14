@@ -4,6 +4,7 @@ from todoapp.inbox import process_inbox
 from todoapp.store.tasks import TaskRepository
 
 NOW = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
+STAMP = NOW.astimezone().strftime("%Y%m%d-%H%M%S")  # processed names use local time (R8)
 
 CHATTY = 'Sure! Here are your tasks:\n```json\n{"tasks": [{"title": "Send NDA", "project": "Line 4 Bid"}, {"title": "Book room"}]}\n```\nAnything else?'
 
@@ -14,7 +15,7 @@ def test_inbox_imports_and_moves_file(tmp_path):
     res = process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
     assert res.imported == 2 and res.problems == []
     assert not (tmp_path / "inbox" / "meeting.json").exists()
-    assert [f.name for f in (tmp_path / "inbox/processed").iterdir()] == ["20261113-090000-meeting.json"]
+    assert [f.name for f in (tmp_path / "inbox/processed").iterdir()] == [f"{STAMP}-meeting.json"]
 
 
 def test_inbox_bad_file_left_and_reported(tmp_path):
@@ -29,10 +30,24 @@ def test_inbox_partial_file_imports_valid_items_and_reports_rest(tmp_path):
     (tmp_path / "inbox").mkdir()
     (tmp_path / "inbox" / "mix.json").write_text('[{"title": "a"}, {"project": "x"}]')
     res = process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
-    assert res.imported == 1
-    assert [(p.file, p.error) for p in res.problems] == [("inbox/mix.json", "Item 2: missing title")]
+    assert res.imported == 1 and res.problems == []
+    # the skipped item points at the processed file, where the user can find it
+    processed = f"inbox/processed/{STAMP}-mix.json"
+    assert [(p.file, p.error) for p in res.skipped] == [(processed, "Item 2: missing title")]
     assert not (tmp_path / "inbox" / "mix.json").exists()
-    assert len(list((tmp_path / "inbox/processed").iterdir())) == 1
+    assert (tmp_path / processed).is_file()
+
+
+def test_inbox_processed_stamp_is_local_time(tmp_path):
+    summer = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)  # 13:00 in British Summer Time
+    (tmp_path / "inbox").mkdir()
+    (tmp_path / "inbox" / "a.json").write_text('{"title": "x"}')
+    repo = TaskRepository(tmp_path)
+    process_inbox(tmp_path, repo, [], summer)
+    local = summer.astimezone().strftime("%Y%m%d-%H%M%S")
+    assert [f.name for f in (tmp_path / "inbox/processed").iterdir()] == [f"{local}-a.json"]
+    # task timestamps stay in UTC
+    assert repo.scan([]).tasks[0].created_at == summer
 
 
 def test_inbox_all_invalid_items_file_stays(tmp_path):
@@ -46,12 +61,12 @@ def test_inbox_all_invalid_items_file_stays(tmp_path):
 def test_inbox_processed_name_never_overwrites(tmp_path):
     inbox = tmp_path / "inbox"
     (inbox / "processed").mkdir(parents=True)
-    (inbox / "processed" / "20261113-090000-a.json").write_text("old")
+    (inbox / "processed" / f"{STAMP}-a.json").write_text("old")
     (inbox / "a.json").write_text('{"title": "x"}')
     process_inbox(tmp_path, TaskRepository(tmp_path), [], NOW)
     names = sorted(f.name for f in (inbox / "processed").iterdir())
-    assert names == ["20261113-090000-a-1.json", "20261113-090000-a.json"]
-    assert (inbox / "processed" / "20261113-090000-a.json").read_text() == "old"
+    assert names == [f"{STAMP}-a-1.json", f"{STAMP}-a.json"]
+    assert (inbox / "processed" / f"{STAMP}-a.json").read_text() == "old"
 
 
 def test_inbox_handles_bom_skips_temp_and_ignores_processed_and_other_files(tmp_path):

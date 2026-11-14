@@ -71,7 +71,11 @@ class AppContext:
         self.bus = EventBus()
         # Hold this for any write: `with ctx.lock:` (re-entrant, so nesting is fine).
         self.lock = threading.RLock()
+        # Files left in the inbox: replaced on every refresh.
         self.inbox_problems: list[FileProblem] = []
+        # Items skipped from imported files, keyed by the processed file's path. They stay
+        # until that file is removed from inbox/processed/.
+        self.import_problems: dict[str, list[FileProblem]] = {}
         self._watcher: DataWatcher | None = None
         self._build_repositories()
 
@@ -95,16 +99,23 @@ class AppContext:
     def refresh(self) -> None:
         """Process the inbox, rescan tasks and tell browsers something changed."""
         with self.lock:
+            d = Path(self.settings.data_dir)
             projects, problem = self.read_projects()
             active = [p for p in projects if p.status == "active"]
             if problem is None:
-                result = process_inbox(Path(self.settings.data_dir), self.tasks, active, utcnow())
+                result = process_inbox(d, self.tasks, active, utcnow())
                 self.inbox_problems = result.problems
+                for p in result.skipped:
+                    self.import_problems.setdefault(p.file, []).append(p)
             else:
                 # Hold the inbox: importing now would lose project assignments.
                 self.inbox_problems = []
+            self.import_problems = {f: ps for f, ps in self.import_problems.items() if (d / f).is_file()}
             self.tasks.scan(active, known=projects)
         self.bus.publish("changed")
+
+    def all_inbox_problems(self) -> list[FileProblem]:
+        return [*self.inbox_problems, *(p for ps in self.import_problems.values() for p in ps)]
 
     def start_watcher(self) -> None:
         """Watch the current data folder, replacing any earlier watcher."""
@@ -127,6 +138,7 @@ class AppContext:
             path.mkdir(parents=True, exist_ok=True)
             self.settings = self.settings.model_copy(update={"data_dir": path})
             self._build_repositories()
+            self.import_problems = {}  # they belong to the old folder
             was_watching = self._watcher is not None
             self.stop_watcher()
             self.refresh()
