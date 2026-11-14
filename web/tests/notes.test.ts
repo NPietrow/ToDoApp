@@ -7,7 +7,7 @@ import NotesCell from '../src/components/NotesCell.svelte'
 import * as api from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
-import { fixtureState, resetApp } from './fixtures'
+import { FakeResizeObserver, fixtureState, resetApp } from './fixtures'
 
 let user: ReturnType<typeof userEvent.setup>
 let put: ReturnType<typeof vi.spyOn>
@@ -91,5 +91,27 @@ describe('notes cell', () => {
     await user.type(box, '!')
     await vi.advanceTimersByTimeAsync(400)
     expect(toast.current?.message).toContain('disk full')
+  })
+
+  test('refits its height when its width changes, without a keystroke', () => {
+    let scrollHeight = 40
+    let clientWidth = 300
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', { configurable: true, get: () => scrollHeight })
+    Object.defineProperty(HTMLTextAreaElement.prototype, 'clientWidth', { configurable: true, get: () => clientWidth })
+    try {
+      render(NotesCell, { projectId: 'p1' })
+      const box = screen.getByRole('textbox', { name: 'Notes' })
+      expect(box.style.height).toBe('40px')
+      const observer = FakeResizeObserver.instances.find((o) => o.observed.includes(box))!
+      scrollHeight = 90
+      observer.callback() // same width: ignored
+      expect(box.style.height).toBe('40px')
+      clientWidth = 200
+      observer.callback()
+      expect(box.style.height).toBe('90px')
+    } finally {
+      delete (HTMLTextAreaElement.prototype as unknown as Record<string, unknown>).scrollHeight
+      delete (HTMLTextAreaElement.prototype as unknown as Record<string, unknown>).clientWidth
+    }
   })
 })

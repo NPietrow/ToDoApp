@@ -67,19 +67,42 @@
     onInput()
   }
 
-  /** Grow to fit the content: set the height from scrollHeight now and whenever the text changes. */
-  function grow(node: HTMLTextAreaElement, _text: string) {
+  /**
+   * Grow to fit the content. Refits when the text or the text size changes, and (via a
+   * ResizeObserver) when the box's width changes, as wrapping then changes too. Height changes
+   * are ignored, so setting the height ourselves can't loop.
+   */
+  function grow(node: HTMLTextAreaElement, _deps: { text: string; size: string }) {
     const fit = () => {
       node.style.height = 'auto'
       node.style.height = `${node.scrollHeight}px`
     }
+    let width = node.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (node.clientWidth === width) return
+      width = node.clientWidth
+      fit()
+    })
+    observer.observe(node)
+    let frame = 0
     fit()
-    return { update: fit }
+    return {
+      update() {
+        fit()
+        // A text size change lands in the page's font size a moment later: fit again after it.
+        cancelAnimationFrame(frame)
+        frame = requestAnimationFrame(fit)
+      },
+      destroy() {
+        cancelAnimationFrame(frame)
+        observer.disconnect()
+      },
+    }
   }
 </script>
 
 <textarea aria-label="Notes" rows="1" bind:this={el} bind:value={draft} oninput={onInput}
-  onkeydown={onKeydown} onblur={() => void flush()} use:grow={draft}
+  onkeydown={onKeydown} onblur={() => void flush()} use:grow={{ text: draft, size: app.settings.text_size }}
   use:plainPaste={{ multiline: true }} style:overflow-y="hidden"
 ></textarea>
 
