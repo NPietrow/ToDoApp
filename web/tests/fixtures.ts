@@ -1,4 +1,5 @@
 // Shared component-test state: two projects and four tasks, on a fixed "today".
+import { vi } from 'vitest'
 import { app } from '../src/lib/state.svelte'
 import type { AppState, Project, Task } from '../src/lib/types'
 
@@ -98,6 +99,19 @@ export function fixtureState(): AppState {
   })
 }
 
+/** jsdom has no ResizeObserver: a stand-in that records what it watches and lets a test fire it. */
+export class FakeResizeObserver {
+  static instances: FakeResizeObserver[] = []
+  observed: Element[] = []
+  disconnect = vi.fn()
+  constructor(public callback: () => void) {
+    FakeResizeObserver.instances.push(this)
+  }
+  observe(el: Element) {
+    this.observed.push(el)
+  }
+}
+
 /** Put `app` back to the fixture, loaded, on TODAY. */
 export function resetApp(): void {
   const s = fixtureState()
@@ -109,4 +123,6 @@ export function resetApp(): void {
   app.windows_app = s.windows_app
   app.today = TODAY
   app.loaded = true
+  FakeResizeObserver.instances = []
+  vi.stubGlobal('ResizeObserver', FakeResizeObserver)
 }

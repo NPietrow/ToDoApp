@@ -40,7 +40,7 @@ describe('collapsing a column', () => {
     expect(strip).toHaveTextContent('Twin Pilot')
     expect(strip).toHaveStyle({ background: '#d6e8cd' })
     expect(screen.getByRole('grid').getAttribute('style')).toContain(
-      'grid-template-columns: var(--label-w, 90px) 38px minmax(200px, 1fr)',
+      'grid-template-columns: calc(var(--label-w, 90px) + 16px) 38px minmax(200px, 1fr)',
     )
   })
 
@@ -83,7 +83,7 @@ describe('collapsing a column', () => {
     render(Grid)
     expect(screen.getAllByRole('columnheader')).toHaveLength(2)
     expect(screen.getByRole('grid').getAttribute('style')).toContain(
-      'var(--label-w, 90px) minmax(200px, 1fr) minmax(200px, 1fr)',
+      'calc(var(--label-w, 90px) + 16px) minmax(200px, 1fr) minmax(200px, 1fr)',
     )
     expect(app.settings.collapsed_projects).toEqual(['gone', 'p9'])
   })

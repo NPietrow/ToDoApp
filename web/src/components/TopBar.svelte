@@ -1,11 +1,29 @@
 <script lang="ts">
   // View tabs on the left, Grid actions on the right.
+  import { onMount } from 'svelte'
   import { patchSettings } from '../lib/api'
   import { collapseAll, expandAll } from '../lib/collapse'
   import { app } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
 
   const LATER_VIEWS = ['Today', 'Kanban', 'Table', 'Stats']
+
+  let header: HTMLElement
+
+  // Publish the bar's real height (it wraps on narrow windows) for the sticky project headers,
+  // and the visible page width (without the scrollbar) so the bar stays put when scrolling sideways.
+  onMount(() => {
+    const root = document.documentElement
+    const publish = () => {
+      root.style.setProperty('--topbar-h', `${header.offsetHeight}px`)
+      root.style.setProperty('--vw', `${root.clientWidth}px`)
+    }
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(header)
+    observer.observe(root)
+    return () => observer.disconnect()
+  })
 
   async function toggleShowCompleted() {
     const value = !app.settings.show_completed
@@ -19,7 +37,7 @@
   }
 </script>
 
-<header class="top">
+<header class="top" bind:this={header}>
   <nav class="views" aria-label="Views">
     <button type="button" class="view on" aria-current="page">Grid</button>
     {#each LATER_VIEWS as view (view)}
@@ -55,7 +73,13 @@
 
 <style>
   .top {
-    flex: none;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 4;
+    box-sizing: border-box;
+    width: var(--vw, 100vw);
+    background: var(--bg);
     display: flex;
     flex-wrap: wrap;
     align-items: center;

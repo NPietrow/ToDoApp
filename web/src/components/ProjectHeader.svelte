@@ -35,7 +35,7 @@
   }
   .ph {
     position: sticky;
-    top: 0;
+    top: var(--topbar-h, 48px);
     z-index: 2;
     min-width: 0;
     padding: 9px 12px;

@@ -23,7 +23,7 @@
   const isCollapsed = (id: string) => collapsedIds.has(id)
   const expanded = $derived(projects.filter((p) => !isCollapsed(p.id)))
   const columns = $derived(
-    'var(--label-w, 90px) ' +
+    'calc(var(--label-w, 90px) + 16px) ' +
       projects.map((p) => (isCollapsed(p.id) ? '38px' : 'minmax(200px, 1fr)')).join(' '),
   )
   const rowCount = TASK_TYPES.length + 2 // header, task types, Notes
@@ -168,14 +168,11 @@
 {/if}
 
 <style>
-  /* The board fills the space under the top bar and scrolls both ways, so the project headers
-     (sticky top) and row labels (sticky left) stay pinned. Cells never scroll themselves. */
+  /* The page itself scrolls, both ways: nothing here sets overflow. The top bar is pinned at the
+     top, and the project headers and row labels stick beneath and beside it. Cells never scroll
+     themselves. The left gutter is the row labels' own padding, so a pinned label covers it. */
   .grid-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: auto;
-    overflow-y: auto;
-    padding: 0 16px 16px;
+    padding: 0 16px 16px 0;
   }
   .board {
     display: flex;
@@ -183,7 +180,7 @@
   }
   .addproj {
     position: sticky;
-    top: 0;
+    top: var(--topbar-h, 48px);
     z-index: 2;
     flex: none;
     margin-left: 6px;
@@ -206,30 +203,27 @@
     gap: 6px;
     align-items: stretch;
   }
+  /* Pinned label and corner: an opaque box that also covers the gap beside it (a border in the
+     gap colour, pulled into the gap by a negative margin) so scrolled cells don't show through. */
   .corner {
     position: sticky;
-    top: 0;
+    top: var(--topbar-h, 48px);
     left: 0;
     z-index: 3;
+    margin: 0 -6px -6px 0;
+    border-right: 6px solid var(--bg);
+    border-bottom: 6px solid var(--bg);
     background: var(--bg);
-    /* Cover the gutter to the left and the gap below, so scrolled cells don't show through. */
-    box-shadow:
-      -16px 0 0 var(--bg),
-      0 6px 0 var(--bg),
-      -16px 6px 0 var(--bg),
-      6px 0 0 var(--bg),
-      6px 6px 0 var(--bg);
   }
   .rl {
     position: sticky;
     left: 0;
     z-index: 1;
-    padding: 12px 4px;
+    margin: 0 -6px -6px 0;
+    padding: 12px 4px 12px 20px;
+    border-right: 6px solid var(--bg);
+    border-bottom: 6px solid var(--bg);
     background: var(--bg);
-    /* Cover the gutter to the left and the gap to the right while pinned. */
-    box-shadow:
-      -16px 0 0 var(--bg),
-      6px 0 0 var(--bg);
     color: #a3a3a3;
     font-size: 0.84em;
     font-weight: 700;

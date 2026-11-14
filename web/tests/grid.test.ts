@@ -4,14 +4,17 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import App from '../src/App.svelte'
+import appSource from '../src/App.svelte?raw'
 import Grid from '../src/components/Grid.svelte'
+import gridSource from '../src/components/Grid.svelte?raw'
 import ProjectNameDialog from '../src/components/ProjectNameDialog.svelte'
 import TopBar from '../src/components/TopBar.svelte'
+import topBarSource from '../src/components/TopBar.svelte?raw'
 import * as api from '../src/lib/api'
 import { ApiError } from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
-import { fixtureState, makeProject, makeTask, resetApp } from './fixtures'
+import { FakeResizeObserver, fixtureState, makeProject, makeTask, resetApp } from './fixtures'
 
 class FakeEventSource {
   static last: FakeEventSource | null = null
@@ -102,13 +105,27 @@ describe('Grid', () => {
     const { container } = render(Grid)
     const grid = screen.getByRole('grid')
     expect(grid.getAttribute('style')).toContain(
-      'grid-template-columns: var(--label-w, 90px) minmax(200px, 1fr) minmax(200px, 1fr)',
+      'grid-template-columns: calc(var(--label-w, 90px) + 16px) minmax(200px, 1fr) minmax(200px, 1fr)',
     )
     for (const cell of screen.getAllByRole('gridcell')) {
       expect(cell.style.overflow).toBe('')
       expect(cell.style.maxHeight).toBe('')
     }
     expect(container.querySelector('.grid-scroll')).not.toBeNull()
+  })
+
+  // jsdom doesn't apply Svelte's scoped CSS (getComputedStyle sees none of it), so check the
+  // style text of the components that wrap the board instead.
+  test('nothing around the board sets overflow: the page scrolls, not an inner area', () => {
+    const { container } = render(Grid)
+    const scroll = container.querySelector('.grid-scroll') as HTMLElement
+    expect(scroll.getAttribute('style')).toBeNull()
+    expect(scroll.style.overflow).toBe('')
+    for (const source of [gridSource, appSource, topBarSource]) {
+      const css = source.slice(source.indexOf('<style>'))
+      expect(css).not.toMatch(/overflow(-x|-y)?\s*:\s*(auto|scroll)/)
+    }
+    expect(appSource).not.toMatch(/height:\s*100vh/)
   })
 
   test('tasks in a cell are sorted by order', () => {
@@ -280,6 +297,29 @@ describe('TopBar', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Show completed' }))
     await waitFor(() => expect(app.settings.show_completed).toBe(false))
     expect(toast.current?.message).toMatch(/Show completed/)
+  })
+})
+
+describe('TopBar pinning', () => {
+  test('publishes its height and the page width as CSS variables, and disconnects on destroy', () => {
+    const root = document.documentElement
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(52)
+    const { unmount } = render(TopBar)
+    expect(root.style.getPropertyValue('--topbar-h')).toBe('52px')
+    expect(root.style.getPropertyValue('--vw')).toBe(`${root.clientWidth}px`)
+
+    const [observer] = FakeResizeObserver.instances
+    expect(observer.observed).toContain(screen.getByRole('banner'))
+    expect(observer.observed).toContain(root)
+
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
+    observer.callback()
+    expect(root.style.getPropertyValue('--topbar-h')).toBe('80px')
+
+    unmount()
+    expect(observer.disconnect).toHaveBeenCalled()
+    root.style.removeProperty('--topbar-h')
+    root.style.removeProperty('--vw')
   })
 })
 

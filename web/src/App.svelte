@@ -42,9 +42,9 @@
 
 <style>
   .app {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
+    /* As wide as the board, so the page scrolls sideways with the pinned parts working. */
+    width: max-content;
+    min-width: 100%;
   }
   .loading {
     margin: 16px;

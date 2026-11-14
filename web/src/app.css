@@ -24,11 +24,6 @@ body {
   margin: 0;
 }
 
-html,
-body {
-  height: 100%;
-}
-
 /* Pill buttons (top bar, dialogs, empty state). */
 .btn {
   padding: 4px 12px;
