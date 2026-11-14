@@ -289,4 +289,75 @@ describe('dialogFocus returnFocus', () => {
     opener.remove()
     node.remove()
   })
+
+  test('a mousedown on blank space inside the dialog does not move focus to the first control', async () => {
+    const node = document.createElement('div')
+    const first = document.createElement('input')
+    const blank = document.createElement('p')
+    blank.textContent = 'Some label text'
+    const b = document.createElement('button')
+    node.append(first, blank, b)
+    document.body.append(node)
+    const action = dialogFocus(node, { onEscape() {} })
+    await user.click(b)
+    expect(b).toHaveFocus()
+    await user.pointer({ keys: '[MouseLeft>]', target: blank })
+    expect(document.activeElement).toBe(document.body) // the browser drops focus to the body
+    await new Promise((r) => setTimeout(r, 10))
+    expect(first).not.toHaveFocus()
+    expect(document.activeElement).toBe(document.body)
+    await user.pointer({ keys: '[/MouseLeft]', target: blank })
+    action.destroy()
+    node.remove()
+  })
+
+  test('in the task pop-up, clicking blank space leaves focus alone', async () => {
+    setup()
+    render(TaskModal)
+    const title = screen.getByRole('textbox', { name: 'Title' })
+    const status = screen.getByRole('button', { name: 'Blocked' })
+    await user.click(status)
+    expect(status).toHaveFocus()
+    await user.click(screen.getByRole('dialog', { name: 'Task details' }))
+    await new Promise((r) => setTimeout(r, 10))
+    expect(title).not.toHaveFocus()
+  })
+
+  test('destroy clears a pending rescue', async () => {
+    const node = document.createElement('div')
+    const a = document.createElement('button')
+    const b = document.createElement('button')
+    node.append(a, b)
+    document.body.append(node)
+    const action = dialogFocus(node, { onEscape() {} })
+    b.focus()
+    b.blur() // queues a rescue check
+    b.remove()
+    action.destroy()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(a).not.toHaveFocus()
+    node.remove()
+  })
+})
+
+describe('closing the window flushes pending typing', () => {
+  test('pagehide sends the pending title as one keepalive request', async () => {
+    setup()
+    render(TaskModal)
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), '!')
+    expect(patch).not.toHaveBeenCalled()
+    window.dispatchEvent(new Event('pagehide'))
+    expect(patch).toHaveBeenCalledTimes(1)
+    expect(patch).toHaveBeenCalledWith(TASK.id, { title: 'Chase Sam!' }, { keepalive: true })
+    await new Promise((r) => setTimeout(r, 450))
+    window.dispatchEvent(new Event('pagehide'))
+    expect(patch).toHaveBeenCalledTimes(1)
+  })
+
+  test('pagehide with nothing pending sends nothing', () => {
+    setup()
+    render(TaskModal)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(patch).not.toHaveBeenCalled()
+  })
 })

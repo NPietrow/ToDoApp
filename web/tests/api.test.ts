@@ -91,3 +91,21 @@ test('moveTask accepts null project (Unsorted)', async () => {
     body: '{"project_id":null,"task_type":"urgent","index":2}',
   })
 })
+
+test('keepalive is passed through, with the same method, credentials and content type', async () => {
+  const f = vi.fn(async (_p: RequestInfo | URL, _i?: RequestInit) => new Response(null, { status: 204 }))
+  globalThis.fetch = f
+  await putNotes('p1', 'hi', { keepalive: true })
+  await putNotes('p1', 'hi')
+  expect(f.mock.calls[0][1]).toEqual({
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{"text":"hi"}',
+    keepalive: true,
+  })
+  expect(f.mock.calls[1][1]).not.toHaveProperty('keepalive')
+  f.mockImplementation(async () => new Response('{}', { status: 200 }))
+  await patchTask('t1', { title: 'x' }, { keepalive: true })
+  expect(f.mock.calls[2][1]).toMatchObject({ method: 'PATCH', keepalive: true })
+})

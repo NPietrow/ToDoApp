@@ -35,22 +35,36 @@ export function dialogFocus(node: HTMLElement, options: DialogOptions) {
       }
     }
   }
+  // The last element inside the dialog that had focus.
+  let last: HTMLElement | null =
+    document.activeElement instanceof HTMLElement && node.contains(document.activeElement)
+      ? document.activeElement
+      : null
+
   // A click on the backdrop or a stray focus must not leave the keyboard outside the dialog.
   function onfocusin(e: FocusEvent) {
-    if (e.target instanceof Node && !node.contains(e.target)) focusables()[0]?.focus()
+    if (!(e.target instanceof Node)) return
+    if (node.contains(e.target)) {
+      if (e.target instanceof HTMLElement) last = e.target
+    } else focusables()[0]?.focus()
   }
 
-  // Focus that falls to nothing (the focused control was removed, e.g. a picker closing) would
-  // leave Escape and Tab with no dialog to act on: put it back inside. A window that has lost
-  // focus (alt-tab) is left alone.
+  // Focus that falls to nothing because the focused control was removed (e.g. a picker closing)
+  // would leave Escape and Tab with no dialog to act on: put it back inside. Focus dropped by a
+  // click on blank space inside the dialog (its control is still there) is left where it is, and
+  // so is a window that has lost focus (alt-tab).
   function rescue() {
     const at = document.activeElement
     if (!node.isConnected || !document.hasFocus()) return
     if (at && at !== document.body && at !== document.documentElement) return
+    if (last?.isConnected) return
     ;(node.querySelector<HTMLElement>('[data-autofocus]') ?? focusables()[0])?.focus()
   }
+  let pending: ReturnType<typeof setTimeout> | undefined
   function onfocusout(e: FocusEvent) {
-    if (e.relatedTarget === null) setTimeout(rescue)
+    if (e.relatedTarget !== null) return
+    clearTimeout(pending)
+    pending = setTimeout(rescue)
   }
   const watcher = new MutationObserver(rescue)
   watcher.observe(node, { childList: true, subtree: true })
@@ -63,6 +77,7 @@ export function dialogFocus(node: HTMLElement, options: DialogOptions) {
       opts = next
     },
     destroy() {
+      clearTimeout(pending)
       watcher.disconnect()
       node.removeEventListener('focusout', onfocusout)
       node.removeEventListener('keydown', onkeydown)

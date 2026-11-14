@@ -55,7 +55,7 @@ test("capture, tick, open pop-up, set due date", async ({ page }) => {
   await page.getByText("Chase Sam").click();
   await page.getByRole("button", { name: /no date/i }).click();
   await page.getByText("Tomorrow").click();
-  await page.getByRole("button", { name: "Close" }).click(); // see the Escape test below for why not Escape
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("row", { name: /Quick/ }).getByText("Tomorrow")).toBeVisible();
   await page.getByRole("checkbox").first().click();
   await expect(page.locator("[data-task-id]").first()).toHaveClass(/done/);

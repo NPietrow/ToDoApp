@@ -34,12 +34,18 @@ function detailMessage(detail: unknown): string | null {
   return null
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export interface RequestOptions {
+  /** Let the request outlive the page: for the last save when the window closes (pagehide). */
+  keepalive?: boolean
+}
+
+async function request<T>(method: string, path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
   const init: RequestInit = { method, credentials: 'same-origin' }
   if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' }
     init.body = JSON.stringify(body)
   }
+  if (opts?.keepalive) init.keepalive = true
   const res = await fetch(path, init)
   if (!res.ok) {
     let message: string | null = null
@@ -61,8 +67,8 @@ export const getState = () => request<AppState>('GET', '/api/state')
 export const createTask = (title: string, projectId: string | null, taskType: TaskType) =>
   request<Task>('POST', '/api/tasks', { title, project_id: projectId, task_type: taskType })
 
-export const patchTask = (id: string, changes: TaskChanges) =>
-  request<Task>('PATCH', `/api/tasks/${enc(id)}`, changes)
+export const patchTask = (id: string, changes: TaskChanges, opts?: RequestOptions) =>
+  request<Task>('PATCH', `/api/tasks/${enc(id)}`, changes, opts)
 
 export const setDone = (id: string, done: boolean) =>
   request<Task>('POST', `/api/tasks/${enc(id)}/done`, { done })
@@ -96,8 +102,8 @@ export const closeProject = (id: string, moveOpenTo: string | null) =>
 export const reopenProject = (id: string) =>
   request<Project>('POST', `/api/projects/${enc(id)}/reopen`)
 
-export const putNotes = (projectId: string, text: string) =>
-  request<void>('PUT', `/api/notes/${enc(projectId)}`, { text })
+export const putNotes = (projectId: string, text: string, opts?: RequestOptions) =>
+  request<void>('PUT', `/api/notes/${enc(projectId)}`, { text }, opts)
 
 export const previewIntake = (text: string) =>
   request<PreviewResult>('POST', '/api/intake/preview', { text })

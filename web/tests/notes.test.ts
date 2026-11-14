@@ -100,6 +100,20 @@ describe('notes cell', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
+  test('pagehide sends the pending text as one keepalive request', async () => {
+    render(NotesCell, { projectId: 'p1' })
+    const box = screen.getByRole('textbox', { name: 'Notes' })
+    await user.click(box)
+    await user.type(box, '!')
+    expect(put).not.toHaveBeenCalled()
+    window.dispatchEvent(new Event('pagehide'))
+    expect(put).toHaveBeenCalledTimes(1)
+    expect(put).toHaveBeenCalledWith('p1', 'Sam: firewall change needs IT ticket!', { keepalive: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(put).toHaveBeenCalledTimes(1)
+  })
+
   test('a failed save toasts', async () => {
     put.mockRejectedValue(new Error('disk full'))
     render(NotesCell, { projectId: 'p1' })

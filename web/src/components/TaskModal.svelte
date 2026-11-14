@@ -77,24 +77,27 @@
     return true
   }
 
-  const save = (changes: TaskChanges) => attempt(() => patchTask(id, changes))
+  const save = (changes: TaskChanges, keepalive = false) =>
+    attempt(() => (keepalive ? patchTask(id, changes, { keepalive: true }) : patchTask(id, changes)))
 
   function queue(changes: TaskChanges) {
     pending = { ...pending, ...changes }
     clearTimeout(timer)
-    timer = setTimeout(flush, DEBOUNCE_MS)
+    timer = setTimeout(() => flush(), DEBOUNCE_MS)
   }
 
-  function flush() {
+  /** `keepalive` lets the save outlive the page: used when the window is closing. */
+  function flush(keepalive = false) {
     clearTimeout(timer)
     timer = undefined
     if (Object.keys(pending).length === 0) return
     const changes = pending
     pending = {}
-    void save(changes)
+    void save(changes, keepalive)
   }
 
-  onDestroy(flush)
+  // onDestroy doesn't run when the window closes; pagehide does.
+  onDestroy(() => flush())
 
   function close() {
     flush()
@@ -184,6 +187,8 @@
 
   const returnFocus = () => document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`)
 </script>
+
+<svelte:window onpagehide={() => flush(true)} />
 
 {#if task}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Esc closes; the backdrop click is a mouse shortcut) -->

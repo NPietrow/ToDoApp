@@ -31,7 +31,8 @@
     })
   })
 
-  async function flush() {
+  /** `keepalive` lets the save outlive the page: used when the window is closing. */
+  async function flush(keepalive = false) {
     clearTimeout(timer)
     timer = undefined
     if (draft === sent) return
@@ -40,7 +41,7 @@
     sent = text
     inflight++
     try {
-      await putNotes(projectId, text)
+      await (keepalive ? putNotes(projectId, text, { keepalive: true }) : putNotes(projectId, text))
     } catch (err) {
       sent = before
       showToast({ message: `Couldn't save notes: ${err instanceof Error ? err.message : String(err)}` })
@@ -55,6 +56,7 @@
     timer = setTimeout(() => void flush(), DEBOUNCE_MS)
   }
 
+  // onDestroy doesn't run when the window closes; pagehide does.
   onDestroy(() => void flush())
 
   function onKeydown(e: KeyboardEvent) {
@@ -103,6 +105,8 @@
     }
   }
 </script>
+
+<svelte:window onpagehide={() => void flush(true)} />
 
 <textarea aria-label="Notes" rows="1" bind:this={el} bind:value={draft} oninput={onInput}
   onkeydown={onKeydown} onblur={() => void flush()} use:grow={{ text: draft, size: app.settings.text_size }}
