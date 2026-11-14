@@ -30,6 +30,15 @@ class TaskNotFound(KeyError):
     pass
 
 
+NEWER_VERSION = "written by a newer version of ToDoApp"
+
+
+def _is_newer(raw: object) -> bool:
+    """True for a file from a later schema: it must be left exactly as it is."""
+    v = raw.get("schema_version") if isinstance(raw, dict) else None
+    return isinstance(v, int) and not isinstance(v, bool) and v > SCHEMA_VERSION
+
+
 @dataclass
 class FileProblem:
     file: str  # relative to the data folder, forward slashes
@@ -76,7 +85,10 @@ class TaskRepository:
 
     @staticmethod
     def _complete(raw: object) -> Task | None:
-        """The task, if `raw` is a full schema-v1 record; otherwise None."""
+        """The task, if `raw` is a full schema-v1 record; otherwise None.
+
+        A newer-version file is None here too, so `_ensure_loaded`, `get` (and with it
+        update, move and set_done) and `restore` never load it, and never write it."""
         if not isinstance(raw, dict) or raw.get("schema_version") != SCHEMA_VERSION:
             return None
         if not set(Task.model_fields) <= raw.keys():
@@ -117,7 +129,9 @@ class TaskRepository:
             raise ValueError(f"invalid project id: {project_id!r}")
 
     # -- scan -------------------------------------------------------------
-    def scan(self, active: Sequence[Project]) -> ScanResult:
+    def scan(self, active: Sequence[Project], known: Sequence[Project] | None = None) -> ScanResult:
+        """`active` resolves project names; `known` (active and closed; defaults to `active`)
+        is the set of projects whose id a hand-edited file keeps."""
         now = utcnow()
         tasks: dict[str, Task] = {}
         problems: list[FileProblem] = []
@@ -134,7 +148,7 @@ class TaskRepository:
             if hit and hit[0] == sig and not (isinstance(hit[1], Task) and hit[1].id in tasks):
                 result = hit[1]
             else:
-                result, transient = self._read_one(path, active, now, tasks)
+                result, transient = self._read_one(path, active, known, now, tasks)
                 if transient:
                     # environment problem (locked file, disk error): retry on the next scan
                     problems.append(result)
@@ -160,21 +174,31 @@ class TaskRepository:
         return ScanResult(list(tasks.values()), list(problems))
 
     def _read_one(
-        self, path: Path, active: Sequence[Project], now: datetime, seen: dict[str, Task]
+        self,
+        path: Path,
+        active: Sequence[Project],
+        known: Sequence[Project] | None,
+        now: datetime,
+        seen: dict[str, Task],
     ) -> tuple[Task | FileProblem, bool]:
         """Returns (result, transient); a transient problem must not be cached."""
         rel = self._rel(path)
         try:
             raw = read_json(path)
-        except (ValueError, OSError) as e:
+        except OSError as e:
+            # Locked (OneDrive, antivirus, a backup) or a disk error: retry on the next scan.
+            return FileProblem(rel, f"unreadable: {e}"), True
+        except ValueError as e:  # bad JSON or bad encoding: wait until the file changes
             return FileProblem(rel, f"unreadable: {e}"), False
         if not isinstance(raw, dict):
             return FileProblem(rel, "not a JSON object"), False
+        if _is_newer(raw):
+            return FileProblem(rel, NEWER_VERSION), False  # never rewritten, renamed or loaded
         task = self._complete(raw)
         complete = task is not None
         if task is None:
             try:
-                task = normalise_task(raw, active, now)
+                task = normalise_task(raw, active, now, known=known)
             except IntakeError as e:
                 return FileProblem(rel, str(e)), False
         target = self._path(task.id)

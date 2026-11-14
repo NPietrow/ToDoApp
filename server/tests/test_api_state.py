@@ -97,3 +97,33 @@ def test_inbox_held_while_projects_unreadable(make_client, tmp_path):
     c.app.state.ctx.refresh()
     assert not f.exists()
     assert [t["title"] for t in c.get("/api/state").json()["tasks"]] == ["Keep me"]
+
+
+def test_unreadable_notes_file_is_reported_and_the_board_still_loads(client, tmp_path):
+    pid = client.post("/api/projects", json={"name": "A"}).json()["id"]
+    other = client.post("/api/projects", json={"name": "B"}).json()["id"]
+    client.put(f"/api/notes/{other}", json={"text": "fine"})
+    f = tmp_path / "data" / "notes" / f"{pid}.txt"
+    f.write_bytes("\u00a3100 budget".encode("cp1252"))
+    r = client.get("/api/state")
+    assert r.status_code == 200
+    s = r.json()
+    assert s["notes"] == {pid: "", other: "fine"}
+    assert [p["file"] for p in s["problems"]] == [f"notes/{pid}.txt"]
+    put = client.put(f"/api/notes/{pid}", json={"text": "would overwrite"})
+    assert put.status_code == 422 and "can't be read" in put.json()["detail"]
+    assert f.read_bytes() == "\u00a3100 budget".encode("cp1252")
+    f.write_text("fixed", encoding="utf-8")
+    assert client.get("/api/state").json()["problems"] == []
+    assert client.put(f"/api/notes/{pid}", json={"text": "ok"}).status_code == 204
+
+
+def test_hand_edited_task_keeps_its_closed_project(client, tmp_path):
+    pid = client.post("/api/projects", json={"name": "Old Job"}).json()["id"]
+    client.post(f"/api/projects/{pid}/close")
+    tasks = tmp_path / "data" / "tasks"
+    tasks.mkdir(parents=True, exist_ok=True)
+    (tasks / "by-hand.json").write_text(json.dumps({"title": "Still theirs", "project_id": pid}))
+    client.app.state.ctx.refresh()
+    [t] = client.get("/api/state").json()["tasks"]
+    assert t["project_id"] == pid

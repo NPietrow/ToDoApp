@@ -95,7 +95,6 @@ class AppContext:
     def refresh(self) -> None:
         """Process the inbox, rescan tasks and tell browsers something changed."""
         with self.lock:
-            projects, _ = self.read_projects()
             projects, problem = self.read_projects()
             active = [p for p in projects if p.status == "active"]
             if problem is None:
@@ -104,7 +103,7 @@ class AppContext:
             else:
                 # Hold the inbox: importing now would lose project assignments.
                 self.inbox_problems = []
-            self.tasks.scan(active)
+            self.tasks.scan(active, known=projects)
         self.bus.publish("changed")
 
     def start_watcher(self) -> None:

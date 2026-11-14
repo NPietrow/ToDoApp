@@ -17,12 +17,18 @@ def state(request: Request) -> dict:
     ctx = request.app.state.ctx
     with ctx.lock:
         projects, projects_problem = ctx.read_projects()
-        scan = ctx.tasks.scan([p for p in projects if p.status == "active"])
-        problems = [*([projects_problem] if projects_problem else []), *scan.problems, *ctx.inbox_problems]
+        scan = ctx.tasks.scan([p for p in projects if p.status == "active"], known=projects)
+        notes, notes_problems = ctx.notes.all(p.id for p in projects)
+        problems = [
+            *([projects_problem] if projects_problem else []),
+            *scan.problems,
+            *notes_problems,
+            *ctx.inbox_problems,
+        ]
         return {
             "projects": [p.model_dump(mode="json") for p in projects],
             "tasks": [t.model_dump(mode="json") for t in scan.tasks],
-            "notes": ctx.notes.all(p.id for p in projects),
+            "notes": notes,
             "problems": [{"file": p.file, "error": p.error} for p in problems],
             "settings": ctx.settings.model_dump(mode="json"),
             "windows_app": ctx.runtime.windows_app,

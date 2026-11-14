@@ -191,3 +191,96 @@ def test_delete_never_overwrites_earlier_trashed_copy(tmp_path):
     assert {json.loads(p.read_text(encoding="utf-8"))["title"] for p in trashed} == {"A", "B"}
     assert r2.restore(t.id).title == "B"
     assert r2.empty_trash() == 1
+
+
+def _newer_file(tmp_path, id):
+    (tmp_path / "tasks").mkdir(parents=True, exist_ok=True)
+    f = tmp_path / "tasks" / f"{id}.json"
+    raw = {"schema_version": 2, "id": id, "title": "From the future", "project_id": None,
+           "task_type": "general", "status": "not_started", "colour_tag": "teal"}
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    return f
+
+
+def test_newer_schema_file_is_reported_and_never_written(tmp_path, monkeypatch):
+    id = new_id()
+    f = _newer_file(tmp_path, id)
+    other = tmp_path / "tasks" / "renamed-by-hand.json"
+    other.write_text('{"schema_version": 3, "title": "Also newer"}', encoding="utf-8")
+    before = {p.name: p.read_bytes() for p in (tmp_path / "tasks").iterdir()}
+
+    r = TaskRepository(tmp_path)
+    # writes before the first scan must not load it either
+    r.create("Today's task", None)
+    with pytest.raises(TaskNotFound):
+        r.update(id, TaskChanges(title="x"))
+    with pytest.raises(TaskNotFound):
+        r.move(id, new_id(), TaskType.QUICK, 0)
+    res = r.scan([])
+    assert [t.title for t in res.tasks] == ["Today's task"]
+    assert sorted((p.file, p.error) for p in res.problems) == sorted([
+        ("tasks/renamed-by-hand.json", "written by a newer version of ToDoApp"),
+        (f"tasks/{id}.json", "written by a newer version of ToDoApp"),
+    ])
+    # cached until the file changes: the next scan doesn't even re-read it
+    import todoapp.store.tasks as tasks_mod
+
+    reads = []
+    real = tasks_mod.read_json
+    monkeypatch.setattr(tasks_mod, "read_json", lambda p: (reads.append(p), real(p))[1])
+    assert len(r.scan([]).problems) == 2 and reads == []
+    with pytest.raises(TaskNotFound):
+        r.update(id, TaskChanges(title="x"))
+    after = {p.name: p.read_bytes() for p in (tmp_path / "tasks").iterdir() if p.name in before}
+    assert after == before and f.exists() and other.exists()
+
+
+def test_locked_task_file_is_retried_on_the_next_scan(tmp_path, monkeypatch):
+    r = TaskRepository(tmp_path); t = r.create("Locked a moment", None)
+    import todoapp.store.tasks as tasks_mod
+
+    real = tasks_mod.read_json
+    calls = {"n": 0}
+
+    def once(path):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise PermissionError("The process cannot access the file")
+        return real(path)
+
+    monkeypatch.setattr(tasks_mod, "read_json", once)
+    r2 = TaskRepository(tmp_path)
+    first = r2.scan([])
+    assert first.tasks == [] and [p.file for p in first.problems] == [f"tasks/{t.id}.json"]
+    res = r2.scan([])  # the file is unchanged, but a transient problem isn't cached
+    assert [x.id for x in res.tasks] == [t.id] and res.problems == []
+
+
+def test_bad_json_stays_cached_until_the_file_changes(tmp_path, monkeypatch):
+    (tmp_path / "tasks").mkdir(parents=True); f = tmp_path / "tasks" / "bad.json"
+    f.write_text("{nope", encoding="utf-8")
+    r = TaskRepository(tmp_path)
+    assert len(r.scan([]).problems) == 1
+    import todoapp.store.tasks as tasks_mod
+
+    monkeypatch.setattr(tasks_mod, "read_json", lambda p: pytest.fail("re-read a cached bad file"))
+    assert len(r.scan([]).problems) == 1
+
+
+def test_hand_edited_file_keeps_a_closed_projects_id(tmp_path):
+    from todoapp.models import Project, utcnow
+
+    closed = Project(id=new_id(), name="Old Job", colour="sage", position=0, status="closed",
+                     created_at=utcnow(), closed_at=utcnow())
+    (tmp_path / "tasks").mkdir(parents=True)
+    (tmp_path / "tasks" / "hand.json").write_text(
+        json.dumps({"title": "Kept", "project_id": closed.id}), encoding="utf-8"
+    )
+    res = TaskRepository(tmp_path).scan([], known=[closed])
+    assert [(t.title, t.project_id) for t in res.tasks] == [("Kept", closed.id)]
+    # an id nobody knows is still dropped
+    (tmp_path / "tasks" / "hand2.json").write_text(
+        json.dumps({"title": "Lost", "project_id": new_id()}), encoding="utf-8"
+    )
+    res = TaskRepository(tmp_path).scan([], known=[closed])
+    assert {t.title: t.project_id for t in res.tasks}["Lost"] is None

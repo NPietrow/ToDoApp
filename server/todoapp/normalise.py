@@ -16,11 +16,14 @@ class IntakeError(ValueError):
     pass
 
 
-def resolve_project(raw: dict, active: Sequence[Project]) -> str | None:
-    """project_id (if it is an active project's id) wins; else match `project` by name."""
+def resolve_project(
+    raw: dict, active: Sequence[Project], known: Sequence[Project] | None = None
+) -> str | None:
+    """project_id wins if it names a project in `known` (default: `active`, the intake rule);
+    else match `project` by name against active projects."""
     pid = raw.get("project_id")
     if isinstance(pid, str):
-        for p in active:
+        for p in known if known is not None else active:
             if p.id == pid.lower():
                 return p.id
     name = raw.get("project")
@@ -64,7 +67,11 @@ def _int(value: Any) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def normalise_task(raw: dict, active: Sequence[Project], now: datetime) -> Task:
+def normalise_task(
+    raw: dict, active: Sequence[Project], now: datetime, known: Sequence[Project] | None = None
+) -> Task:
+    """Intake (inbox, paste) passes no `known`: only an active project's id is kept. A
+    hand-edited file in tasks/ passes every project, so a link to a closed one survives."""
     title = raw.get("title")
     if not isinstance(title, str) or not clean_title(title):
         raise IntakeError("missing title")
@@ -85,7 +92,7 @@ def normalise_task(raw: dict, active: Sequence[Project], now: datetime) -> Task:
         id=raw_id.lower() if isinstance(raw_id, str) and is_uuid(raw_id.lower()) else new_id(),
         title=title,
         description=description if isinstance(description, str) and description.strip() else None,
-        project_id=resolve_project(raw, active),
+        project_id=resolve_project(raw, active, known),
         task_type=_enum(raw.get("task_type"), TaskType, TaskType.GENERAL),
         status=status,
         status_before_done=before,

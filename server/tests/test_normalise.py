@@ -43,3 +43,12 @@ def test_project_id_wins_over_name():
 def test_done_without_completed_at_gets_now_and_bad_id_replaced():
     t = normalise_task({"title": "x", "status": "done", "id": "nope", "bogus": 1, "due_date": "2026-12-01"}, [], NOW)
     assert t.completed_at == NOW and is_uuid(t.id) and t.due_date == date(2026, 12, 1)
+
+
+def test_closed_project_id_kept_only_when_known():
+    closed = _project("Old Job").model_copy(update={"status": "closed", "closed_at": NOW})
+    raw = {"title": "x", "project_id": closed.id}
+    assert normalise_task(raw, [], NOW).project_id is None  # intake: active projects only
+    assert normalise_task(raw, [], NOW, known=[closed]).project_id == closed.id  # tasks/ files
+    # a name still matches active projects only
+    assert normalise_task({"title": "x", "project": "Old Job"}, [], NOW, known=[closed]).project_id is None
