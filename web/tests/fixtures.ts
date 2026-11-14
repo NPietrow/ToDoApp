@@ -123,6 +123,7 @@ export function resetApp(): void {
   app.windows_app = s.windows_app
   app.today = TODAY
   app.loaded = true
+  app.loadError = null
   FakeResizeObserver.instances = []
   vi.stubGlobal('ResizeObserver', FakeResizeObserver)
 }

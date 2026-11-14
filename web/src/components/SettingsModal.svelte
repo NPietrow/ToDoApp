@@ -16,6 +16,9 @@
 
   const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
   const closed = $derived(app.projects.filter((p) => p.status === 'closed'))
+  // A closed project's open tasks are hidden ("close anyway"); say how many wait behind Reopen.
+  const openCount = (projectId: string) =>
+    app.tasks.filter((t) => t.project_id === projectId && t.status !== 'done').length
 
   let folder = $state(untrack(() => app.settings.data_dir))
   let folderDirty = false
@@ -129,9 +132,13 @@
     {:else}
       <ul>
         {#each closed as p (p.id)}
+          {@const open = openCount(p.id)}
           <li>
             <span class="name">{p.name}</span>
-            <button type="button" class="btn" onclick={() => void reopen(p.id)}>Reopen</button>
+            <span class="end">
+              {#if open > 0}<span class="muted">{open} open</span>{/if}
+              <button type="button" class="btn" onclick={() => void reopen(p.id)}>Reopen</button>
+            </span>
           </li>
         {/each}
       </ul>
@@ -235,5 +242,11 @@
   }
   .name {
     overflow-wrap: anywhere;
+  }
+  .end {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 10px;
   }
 </style>

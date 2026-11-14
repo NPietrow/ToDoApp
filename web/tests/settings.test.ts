@@ -107,6 +107,38 @@ describe('settings', () => {
     expect(reopen).toHaveBeenCalledWith('p3')
   })
 
+  test('a closed project shows how many open tasks it hides', () => {
+    app.projects = [
+      ...app.projects,
+      makeProject({ id: 'p3', name: 'Old Job', status: 'closed' }),
+      makeProject({ id: 'p4', name: 'Finished', status: 'closed' }),
+    ]
+    app.tasks = [
+      makeTask({ id: 'a', title: 'a', project_id: 'p3' }),
+      makeTask({ id: 'b', title: 'b', project_id: 'p3', status: 'blocked' }),
+      makeTask({ id: 'c', title: 'c', project_id: 'p3', status: 'done' }),
+      makeTask({ id: 'd', title: 'd', project_id: 'p4', status: 'done' }),
+    ]
+    render(SettingsModal)
+    expect(screen.getByText('2 open')).toBeInTheDocument()
+    expect(screen.queryByText(/0 open/)).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Reopen' })).toHaveLength(2)
+  })
+
+  test('the board shows the load error with a Retry instead of Loading for ever', async () => {
+    app.loaded = false
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal('EventSource', class { addEventListener() {} close() {} })
+    const get = vi.mocked(api.getState)
+    get.mockRejectedValueOnce(new ApiError(500, 'Internal Server Error'))
+    render(App)
+    expect(await screen.findByText("Couldn't load the board: Internal Server Error")).toBeInTheDocument()
+    expect(screen.queryByText('Loading…')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('button', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.queryByText(/Couldn't load the board/)).toBeNull()
+  })
+
   test('Empty trash needs a confirm, then reports the count', async () => {
     const empty = vi.spyOn(api, 'emptyTrash').mockResolvedValue({ removed: 3 })
     render(SettingsModal)
@@ -123,11 +155,12 @@ describe('settings', () => {
 })
 
 describe('unsorted tray and badges', () => {
-  test('badge counts open tasks with no active project, and assigning patches', async () => {
+  test('badge counts open tasks with no project or an unknown one, and assigning patches', async () => {
     app.tasks = [
       makeTask({ id: 'u1', title: 'Loose end', project_id: null }),
       makeTask({ id: 'u2', title: 'Done loose', project_id: null, status: 'done' }),
       makeTask({ id: 'u3', title: 'On closed', project_id: 'gone' }),
+      makeTask({ id: 'u4', title: 'Deleted project', project_id: 'nobody-knows' }),
       makeTask({ id: 'ok', title: 'Fine', project_id: 'p1' }),
     ]
     app.projects = [...app.projects, makeProject({ id: 'gone', name: 'Gone', status: 'closed' })]
@@ -138,6 +171,9 @@ describe('unsorted tray and badges', () => {
     bar.unmount()
     render(UnsortedTray)
     expect(screen.getByText('Loose end')).toBeInTheDocument()
+    expect(screen.getByText('Deleted project')).toBeInTheDocument()
+    // a closed project's open tasks stay hidden ("close anyway")
+    expect(screen.queryByText('On closed')).toBeNull()
     const selects = screen.getAllByRole('combobox')
     expect(selects).toHaveLength(2)
     await user.selectOptions(selects[0], 'Twin Pilot')

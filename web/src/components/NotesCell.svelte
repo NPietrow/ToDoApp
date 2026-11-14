@@ -1,7 +1,8 @@
 <script lang="ts">
   // One project's notes: a plain textarea that grows with its text and never scrolls inside
   // itself. Saves 400 ms after the last keystroke and on blur. A refresh doesn't overwrite what
-  // is being typed (focus, or a save still waiting or in flight).
+  // is being typed (focus, or a save still waiting or in flight). Read-only while the server
+  // reports its file as unreadable, so the file is never overwritten (see File problems).
   import { onDestroy, untrack } from 'svelte'
   import { putNotes } from '../lib/api'
   import { plainPaste } from '../lib/paste'
@@ -18,6 +19,8 @@
   let sent = untrack(() => app.notes[projectId] ?? '') // the text the server is known to hold
   let timer: ReturnType<typeof setTimeout> | undefined
   let inflight = 0
+
+  const unreadable = $derived(app.problems.some((p) => p.file === `notes/${projectId}.txt`))
 
   $effect(() => {
     const incoming = app.notes[projectId] ?? ''
@@ -55,7 +58,7 @@
   onDestroy(() => void flush())
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || unreadable) return
     const box = e.currentTarget as HTMLTextAreaElement
     if (box.selectionStart !== box.selectionEnd) return
     const next = continueBullet(box.value, box.selectionStart)
@@ -104,6 +107,7 @@
 <textarea aria-label="Notes" rows="1" bind:this={el} bind:value={draft} oninput={onInput}
   onkeydown={onKeydown} onblur={() => void flush()} use:grow={{ text: draft, size: app.settings.text_size }}
   use:plainPaste={{ multiline: true }} style:overflow-y="hidden"
+  readonly={unreadable} placeholder={unreadable ? "Can't read this notes file: see file problems" : undefined}
 ></textarea>
 
 <style>

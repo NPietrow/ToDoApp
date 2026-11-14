@@ -83,6 +83,23 @@ describe('notes cell', () => {
     expect(box).toHaveValue('later')
   })
 
+  test('is read-only while its file is reported unreadable, so it is never overwritten', async () => {
+    app.notes = { p1: '' }
+    app.problems = [{ file: 'notes/p1.txt', error: 'not UTF-8 text; save it as UTF-8' }]
+    render(NotesCell, { projectId: 'p1' })
+    const box = screen.getByRole('textbox', { name: 'Notes' })
+    expect(box).toHaveAttribute('readonly')
+    expect(box).toHaveAttribute('placeholder', "Can't read this notes file: see file problems")
+    await user.click(box)
+    await user.type(box, 'typed')
+    await user.paste('pasted')
+    await user.keyboard('{Enter}')
+    await user.tab()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(box).toHaveValue('')
+    expect(put).not.toHaveBeenCalled()
+  })
+
   test('a failed save toasts', async () => {
     put.mockRejectedValue(new Error('disk full'))
     render(NotesCell, { projectId: 'p1' })

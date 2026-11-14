@@ -43,6 +43,11 @@
   {:else if ui.modal === 'settings'}<SettingsModal />
   {:else if ui.modal === 'unsorted'}<UnsortedTray />
   {:else if ui.modal === 'problems'}<ProblemsList />{/if}
+{:else if app.loadError}
+  <div class="load-error" role="alert">
+    <p>Couldn't load the board: {app.loadError}</p>
+    <button type="button" class="btn" onclick={() => void refresh()}>Retry</button>
+  </div>
 {:else}
   <p class="loading">Loading…</p>
 {/if}
@@ -59,5 +64,13 @@
   .loading {
     margin: 16px;
     color: #a3a3a3;
+  }
+  .load-error {
+    margin: 16px;
+    overflow-wrap: anywhere;
+  }
+  .load-error p {
+    margin: 0 0 8px;
+    color: var(--blocked-fg);
   }
 </style>

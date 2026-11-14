@@ -2,7 +2,7 @@ import { eventsUrl, getState } from './api'
 import { localToday } from './dates'
 import type { AppState, Task } from './types'
 
-export const app: AppState & { today: string; loaded: boolean } = $state({
+export const app: AppState & { today: string; loaded: boolean; loadError: string | null } = $state({
   projects: [],
   tasks: [],
   notes: {},
@@ -19,12 +19,17 @@ export const app: AppState & { today: string; loaded: boolean } = $state({
   windows_app: false,
   today: localToday(),
   loaded: false,
+  /** Why the first load failed; null once the board has loaded. */
+  loadError: null,
 })
 
-/** Open tasks the Grid can't show: no project, or one that isn't active (closed or unknown). */
+/**
+ * Open tasks with no project, or with a project id nobody knows (deleted, or a hand edit).
+ * Open tasks of a closed project are not Unsorted: they stay open but hidden (spec, "close anyway").
+ */
 export function unsortedTasks(): Task[] {
-  const active = new Set(app.projects.filter((p) => p.status === 'active').map((p) => p.id))
-  return app.tasks.filter((t) => t.status !== 'done' && (t.project_id === null || !active.has(t.project_id)))
+  const known = new Set(app.projects.map((p) => p.id))
+  return app.tasks.filter((t) => t.status !== 'done' && (t.project_id === null || !known.has(t.project_id)))
 }
 
 let running: Promise<void> | null = null
@@ -40,9 +45,12 @@ async function fetchOnce(): Promise<void> {
     app.settings = s.settings
     app.windows_app = s.windows_app
     app.loaded = true
+    app.loadError = null
   } catch (e) {
     // Keep the previous state; the next change event or reconnect will try again.
     console.warn('Could not refresh state', e)
+    // Before the first load there is no board to keep: say why, so the page can offer a retry.
+    if (!app.loaded) app.loadError = e instanceof Error ? e.message : String(e)
   }
 }
 

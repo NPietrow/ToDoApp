@@ -12,6 +12,7 @@ export function plainPaste(
   function onPaste(ev: Event) {
     const e = ev as ClipboardEvent
     e.preventDefault()
+    if (node.readOnly || node.disabled) return // setting .value would bypass readonly
     const raw = e.clipboardData?.getData('text/plain') ?? ''
     const text = multiline ? raw.replace(/\r\n?/g, '\n') : singleLine(raw)
     if (!text) return

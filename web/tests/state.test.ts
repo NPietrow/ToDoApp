@@ -24,6 +24,7 @@ const EMPTY_STATE: AppState = {
 
 beforeEach(() => {
   app.loaded = false
+  app.loadError = null
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -112,14 +113,18 @@ test('refresh survives a network error and an ApiError, keeping previous state',
   const spy = vi.spyOn(api, 'getState').mockRejectedValueOnce(new TypeError('Failed to fetch'))
   await expect(refresh()).resolves.toBeUndefined()
   expect(app.loaded).toBe(false)
+  expect(app.loadError).toBe('Failed to fetch')
   spy.mockRejectedValueOnce(new ApiError(500, 'boom'))
   await expect(refresh()).resolves.toBeUndefined()
   expect(warn).toHaveBeenCalledTimes(2)
+  expect(app.loadError).toBe('boom')
   spy.mockResolvedValueOnce({ ...EMPTY_STATE, notes: { k: 'v' } })
   await refresh()
+  expect(app.loadError).toBeNull()
   spy.mockRejectedValueOnce(new TypeError('Failed to fetch'))
   await refresh()
   expect(app.loaded).toBe(true)
+  expect(app.loadError).toBeNull() // a later failure keeps the board, with no error page
   expect(app.notes).toEqual({ k: 'v' })
 })
 

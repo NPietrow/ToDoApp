@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Open tasks the Grid can't show (no project, or a closed/unknown one), each with a project picker.
+  // Open tasks with no project or an unknown one, each with a project picker. A closed project's
+  // open tasks aren't listed: they stay hidden until it is reopened (Settings shows the count).
   import { patchTask } from '../lib/api'
   import { app, refresh, unsortedTasks } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
