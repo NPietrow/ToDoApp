@@ -42,8 +42,10 @@
 
 <style>
   .app {
-    /* As wide as the board, so the page scrolls sideways with the pinned parts working. */
-    width: max-content;
+    /* As wide as the board's min-content (200px columns), but never narrower than the window, so
+       the page scrolls sideways only when the columns no longer fit, with the pinned parts working.
+       Not max-content: that stretches the 1fr columns to the unwrapped width of long titles. */
+    width: fit-content;
     min-width: 100%;
   }
   .loading {

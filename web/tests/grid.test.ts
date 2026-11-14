@@ -126,6 +126,9 @@ describe('Grid', () => {
       expect(css).not.toMatch(/overflow(-x|-y)?\s*:\s*(auto|scroll)/)
     }
     expect(appSource).not.toMatch(/height:\s*100vh/)
+    // fit-content, not max-content: max-content stretches the 1fr tracks to unwrapped titles.
+    expect(appSource).toMatch(/width:\s*fit-content/)
+    expect(appSource).not.toMatch(/width:\s*max-content/)
   })
 
   test('tasks in a cell are sorted by order', () => {
