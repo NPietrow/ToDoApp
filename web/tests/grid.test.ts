@@ -198,18 +198,16 @@ describe('Grid', () => {
     expect(container.querySelector('img')).toBeNull()
   })
 
-  test('Notes row shows each project\'s notes as plain text with links', () => {
-    app.notes = { p1: 'line one\n- see https://example.com/doc.\n<b>x</b>', p2: '' }
-    render(Grid)
-    const notes = within(screen.getByRole('row', { name: 'Notes' })).getAllByRole('gridcell')
+  test('Notes row holds an editable plain-text box per project', () => {
+    app.notes = { p1: 'line one
+<b>x</b>', p2: '' }
+    const { container } = render(Grid)
+    const notes = within(screen.getByRole('row', { name: 'Notes' })).getAllByRole('textbox', { name: 'Notes' })
     expect(notes).toHaveLength(2)
-    expect(notes[0].textContent).toContain('line one\n- see https://example.com/doc.\n<b>x</b>')
-    const link = within(notes[0]).getByRole('link')
-    expect(link).toHaveAttribute('href', 'https://example.com/doc')
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(notes[0].querySelector('b')).toBeNull()
-    expect(notes[1].textContent?.trim()).toBe('')
+    expect(notes[0]).toHaveValue('line one
+<b>x</b>')
+    expect(notes[1]).toHaveValue('')
+    expect(container.querySelector('b')).toBeNull()
   })
 })
 

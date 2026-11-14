@@ -5,13 +5,13 @@
   import { colourOf } from '../lib/palette'
   import { closeProjectNow, projectMenuItems, taskMenuItems } from '../lib/menus'
   import { app } from '../lib/state.svelte'
-  import { linkify } from '../lib/text'
   import { TASK_TYPES, type Project, type RowKey } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
   import CloseProjectDialog from './CloseProjectDialog.svelte'
   import ContextMenu from './ContextMenu.svelte'
   import CollapsedColumn from './CollapsedColumn.svelte'
   import GridCell from './GridCell.svelte'
+  import NotesCell from './NotesCell.svelte'
   import ProjectHeader from './ProjectHeader.svelte'
   import ProjectNameDialog from './ProjectNameDialog.svelte'
 
@@ -121,7 +121,6 @@
         </div>
       {/each}
 
-      <!-- Read-only for now: Task 17 replaces these cells with the editable NotesCell. -->
       <div role="row" aria-label="Notes" style="display:contents">
         <div class="rl" class:collapsed={collapsedRows.has('notes')} role="rowheader">
           <button type="button" class="rlb" onclick={() => toggleRow('notes')}>Notes</button>
@@ -135,11 +134,7 @@
             </div>
           {:else}
             <div class="cell notes" role="gridcell" style:background={colourOf(project.colour).tint}>
-              {#each linkify(app.notes[project.id] ?? '') as seg, i (i)}
-                {#if seg.kind === 'link'}
-                  <a href={seg.href} target="_blank" rel="noopener noreferrer">{seg.text}</a>
-                {:else}{seg.text}{/if}
-              {/each}
+              <NotesCell projectId={project.id} />
             </div>
           {/if}
         {/each}
@@ -270,13 +265,7 @@
     padding: 0;
   }
   .notes {
-    padding: 6px 10px;
-    color: #555;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-  }
-  .notes a {
-    color: inherit;
+    padding: 0;
   }
   .empty {
     flex: 1 1 auto;

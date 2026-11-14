@@ -1,0 +1,104 @@
+<script lang="ts">
+  // One project's notes: a plain textarea that grows with its text and never scrolls inside
+  // itself. Saves 400 ms after the last keystroke and on blur. A refresh doesn't overwrite what
+  // is being typed (focus, or a save still waiting or in flight).
+  import { onDestroy, untrack } from 'svelte'
+  import { putNotes } from '../lib/api'
+  import { plainPaste } from '../lib/paste'
+  import { app, refresh } from '../lib/state.svelte'
+  import { continueBullet } from '../lib/text'
+  import { showToast } from '../lib/toast.svelte'
+
+  const DEBOUNCE_MS = 400
+
+  let { projectId }: { projectId: string } = $props()
+
+  let el: HTMLTextAreaElement | undefined = $state()
+  let draft = $state(untrack(() => app.notes[projectId] ?? ''))
+  let sent = untrack(() => app.notes[projectId] ?? '') // the text the server is known to hold
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let inflight = 0
+
+  $effect(() => {
+    const incoming = app.notes[projectId] ?? ''
+    untrack(() => {
+      if (document.activeElement === el || timer !== undefined || inflight > 0) return
+      draft = incoming
+      sent = incoming
+    })
+  })
+
+  async function flush() {
+    clearTimeout(timer)
+    timer = undefined
+    if (draft === sent) return
+    const text = draft
+    const before = sent
+    sent = text
+    inflight++
+    try {
+      await putNotes(projectId, text)
+    } catch (err) {
+      sent = before
+      showToast({ message: `Couldn't save notes: ${err instanceof Error ? err.message : String(err)}` })
+    } finally {
+      inflight--
+    }
+    void refresh()
+  }
+
+  function onInput() {
+    clearTimeout(timer)
+    timer = setTimeout(() => void flush(), DEBOUNCE_MS)
+  }
+
+  onDestroy(() => void flush())
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return
+    const box = e.currentTarget as HTMLTextAreaElement
+    if (box.selectionStart !== box.selectionEnd) return
+    const next = continueBullet(box.value, box.selectionStart)
+    if (!next) return
+    e.preventDefault()
+    draft = next.value
+    box.value = next.value
+    box.setSelectionRange(next.caret, next.caret)
+    onInput()
+  }
+
+  /** Grow to fit the content: set the height from scrollHeight now and whenever the text changes. */
+  function grow(node: HTMLTextAreaElement, _text: string) {
+    const fit = () => {
+      node.style.height = 'auto'
+      node.style.height = `${node.scrollHeight}px`
+    }
+    fit()
+    return { update: fit }
+  }
+</script>
+
+<textarea aria-label="Notes" rows="1" bind:this={el} bind:value={draft} oninput={onInput}
+  onkeydown={onKeydown} onblur={() => void flush()} use:grow={draft}
+  use:plainPaste={{ multiline: true }} style:overflow-y="hidden"
+></textarea>
+
+<style>
+  textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.6em;
+    padding: 6px 10px;
+    border: 0;
+    background: transparent;
+    color: #555;
+    font: inherit;
+    resize: none;
+    overflow-wrap: anywhere;
+  }
+  textarea:focus {
+    outline: 2px solid rgba(47, 52, 55, 0.25);
+    outline-offset: -2px;
+  }
+</style>

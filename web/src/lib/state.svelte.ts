@@ -1,6 +1,6 @@
 import { eventsUrl, getState } from './api'
 import { localToday } from './dates'
-import type { AppState } from './types'
+import type { AppState, Task } from './types'
 
 export const app: AppState & { today: string; loaded: boolean } = $state({
   projects: [],
@@ -20,6 +20,12 @@ export const app: AppState & { today: string; loaded: boolean } = $state({
   today: localToday(),
   loaded: false,
 })
+
+/** Open tasks the Grid can't show: no project, or one that isn't active (closed or unknown). */
+export function unsortedTasks(): Task[] {
+  const active = new Set(app.projects.filter((p) => p.status === 'active').map((p) => p.id))
+  return app.tasks.filter((t) => t.status !== 'done' && (t.project_id === null || !active.has(t.project_id)))
+}
 
 let running: Promise<void> | null = null
 let again = false

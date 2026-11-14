@@ -1,9 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import Grid from './components/Grid.svelte'
+  import PasteTasksModal from './components/PasteTasksModal.svelte'
+  import ProblemsList from './components/ProblemsList.svelte'
+  import SettingsModal from './components/SettingsModal.svelte'
   import Toast from './components/Toast.svelte'
   import TaskModal from './components/TaskModal.svelte'
   import TopBar from './components/TopBar.svelte'
+  import UnsortedTray from './components/UnsortedTray.svelte'
   import { app, connectEvents, refresh, startDayWatch } from './lib/state.svelte'
   import type { TextSize } from './lib/types'
   import { ui } from './lib/ui.svelte'
@@ -35,6 +39,10 @@
     <Grid />
   </div>
   {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
+  {#if ui.modal === 'paste'}<PasteTasksModal />
+  {:else if ui.modal === 'settings'}<SettingsModal />
+  {:else if ui.modal === 'unsorted'}<UnsortedTray />
+  {:else if ui.modal === 'problems'}<ProblemsList />{/if}
 {:else}
   <p class="loading">Loading…</p>
 {/if}

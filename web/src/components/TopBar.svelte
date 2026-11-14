@@ -3,12 +3,17 @@
   import { onMount } from 'svelte'
   import { patchSettings } from '../lib/api'
   import { collapseAll, expandAll } from '../lib/collapse'
-  import { app } from '../lib/state.svelte'
+  import { app, unsortedTasks } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
+  import { ui, type Modal } from '../lib/ui.svelte'
 
   const LATER_VIEWS = ['Today', 'Kanban', 'Table', 'Stats']
 
   let header: HTMLElement
+
+  const unsortedCount = $derived(unsortedTasks().length)
+  const problemCount = $derived(app.problems.length)
+  const open = (m: Modal) => (ui.modal = m)
 
   // Publish the bar's real height (it wraps on narrow windows) for the sticky project headers,
   // and the visible page width (without the scrollbar) so the bar stays put when scrolling sideways.
@@ -52,8 +57,18 @@
   </nav>
 
   <div class="actions">
-    <!-- Later tasks add their top-bar buttons here, before Show completed:
-         Paste tasks, the Unsorted and problems badges, and Settings (Task 17). -->
+    <button type="button" class="btn" data-modal-button="paste" onclick={() => open('paste')}>Paste tasks</button>
+    {#if unsortedCount > 0}
+      <button type="button" class="btn" data-modal-button="unsorted" onclick={() => open('unsorted')}
+        >Unsorted ({unsortedCount})</button
+      >
+    {/if}
+    {#if problemCount > 0}
+      <button type="button" class="btn warn" data-modal-button="problems" onclick={() => open('problems')}
+        >⚠ {problemCount} file {problemCount === 1 ? 'problem' : 'problems'}</button
+      >
+    {/if}
+    <button type="button" class="btn" data-modal-button="settings" onclick={() => open('settings')}>Settings</button>
     <button type="button" class="btn" onclick={expandAll}>Expand all</button>
     <button
       type="button"
@@ -118,6 +133,11 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-left: auto;
+  }
+  .btn.warn {
+    background: var(--due-bg);
+    border-color: var(--due-fg);
+    color: var(--due-fg);
   }
   .btn.on {
     background: var(--text);
