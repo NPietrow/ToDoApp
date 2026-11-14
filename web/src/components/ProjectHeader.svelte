@@ -15,7 +15,7 @@
     ui.contextMenu = { x: e.clientX, y: e.clientY, kind: 'project', id: project.id }
   }}
 >
-  <button type="button" class="name" aria-expanded="true" onclick={() => toggleProject(project.id)}>
+  <button type="button" class="name" aria-expanded="true" data-project-id={project.id} onclick={() => toggleProject(project.id)}>
     {project.name}
   </button>
 </div>

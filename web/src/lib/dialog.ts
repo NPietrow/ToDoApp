@@ -6,6 +6,8 @@ const FOCUSABLE =
 
 export interface DialogOptions {
   onEscape: () => void
+  /** Where focus goes on close when the element that had it has since left the page. */
+  returnFocus?: () => HTMLElement | null
 }
 
 export function dialogFocus(node: HTMLElement, options: DialogOptions) {
@@ -47,7 +49,8 @@ export function dialogFocus(node: HTMLElement, options: DialogOptions) {
     destroy() {
       node.removeEventListener('keydown', onkeydown)
       document.removeEventListener('focusin', onfocusin)
-      if (previous?.isConnected) previous.focus()
+      const target = previous?.isConnected ? previous : opts.returnFocus?.()
+      target?.focus()
     },
   }
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
-  // One task card in a Grid cell. The tick box is wired here; Task 16 opens the pop-up on
-  // a click elsewhere on the card. Right-click, Shift+F10 and the ContextMenu key open its menu
+  // One task card in a Grid cell. The tick box ticks; a click anywhere else on the card opens
+  // the pop-up (a link inside it is followed instead). Right-click, Shift+F10 and the ContextMenu key open its menu
   // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
   // --accent custom property.
   import { setDone } from '../lib/api'
@@ -24,12 +24,21 @@
     pending = null
   })
 
+  // A drag that ends over its own card must not also count as a click.
+  let dragged = false
+
+  function onclick(e: MouseEvent) {
+    if (dragged || (e.target as HTMLElement).closest('a, .bx')) return
+    ui.openTaskId = task.id
+  }
+
   function dragStart(e: DragEvent) {
     // Only the card itself drags; the tick box (and anything inside the card) never starts one.
     if ((e.target as HTMLElement).closest('.bx')) {
       e.preventDefault()
       return
     }
+    dragged = true
     e.dataTransfer?.setData('text/x-task-id', task.id)
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   }
@@ -72,7 +81,8 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
 <div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}
-  draggable="true" ondragstart={dragStart} role="group" tabindex="0" {onkeydown}
+  draggable="true" ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
+  {onclick} role="group" tabindex="0" {onkeydown}
   oncontextmenu={(e) => {
     e.preventDefault()
     openMenu(e.clientX, e.clientY)

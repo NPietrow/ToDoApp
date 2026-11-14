@@ -2,9 +2,11 @@
   import { onMount } from 'svelte'
   import Grid from './components/Grid.svelte'
   import Toast from './components/Toast.svelte'
+  import TaskModal from './components/TaskModal.svelte'
   import TopBar from './components/TopBar.svelte'
   import { app, connectEvents, refresh, startDayWatch } from './lib/state.svelte'
   import type { TextSize } from './lib/types'
+  import { ui } from './lib/ui.svelte'
 
   const BASE_SIZES: Record<TextSize, string> = { small: '11.5px', medium: '12.5px', large: '14px' }
 
@@ -32,6 +34,7 @@
     <TopBar />
     <Grid />
   </div>
+  {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
 {:else}
   <p class="loading">Loading…</p>
 {/if}

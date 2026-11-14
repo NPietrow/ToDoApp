@@ -3,10 +3,13 @@ import type { Task } from '../src/lib/types'
 import {
   addDays,
   formatDue,
+  formatShortDate,
+  formatStamp,
   isToday,
   isVisibleOnGrid,
   localDateOf,
   localToday,
+  monthGrid,
   nextMonday,
 } from '../src/lib/dates'
 
@@ -59,4 +62,19 @@ test('isToday compares planned_for', () => {
   expect(isToday(T({ planned_for: '2026-11-13' }), '2026-11-13')).toBe(true)
   expect(isToday(T({ planned_for: '2026-11-12' }), '2026-11-13')).toBe(false)
   expect(isToday(T({}), '2026-11-13')).toBe(false)
+})
+
+test('monthGrid lays a month out Monday-first in whole weeks', () => {
+  const g = monthGrid(2026, 11) // 1 Nov 2026 is a Sunday
+  expect(g[0][0]).toBe('2026-10-26')
+  expect(g[0][6]).toBe('2026-11-01')
+  expect(g.at(-1)![6]).toBe('2026-12-06')
+  expect(g.every((w) => w.length === 7)).toBe(true)
+  expect(monthGrid(2027, 2)[0][0]).toBe('2027-02-01') // a Monday start, no padding
+})
+
+test('formatShortDate and formatStamp use the local day and time', () => {
+  const iso = new Date(2026, 10, 4, 9, 5).toISOString()
+  expect(formatShortDate(iso)).toBe('4 Nov')
+  expect(formatStamp(iso)).toBe('4 Nov 09:05')
 })

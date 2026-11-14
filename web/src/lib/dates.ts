@@ -54,6 +54,29 @@ export function formatDue(due: string, today: string): string {
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 
+/** "4 Nov": the local calendar day of a UTC ISO datetime. */
+export function formatShortDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+
+/** "4 Nov 09:12": local day and time of a UTC ISO datetime. */
+export function formatStamp(iso: string): string {
+  const d = new Date(iso)
+  return `${formatShortDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** The 'YYYY-MM-DD' days of a month laid out Monday-first: whole weeks, padded with the neighbouring months. */
+export function monthGrid(year: number, month: number): string[][] {
+  const first = `${year}-${pad(month)}-01`
+  const lead = (new Date(year, month - 1, 1).getDay() + 6) % 7 // Monday = 0
+  const count = new Date(year, month, 0).getDate()
+  const weeks = Math.ceil((lead + count) / 7)
+  return Array.from({ length: weeks }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => addDays(first, w * 7 + d - lead)),
+  )
+}
+
 export function isToday(t: Task, today: string): boolean {
   return t.planned_for === today
 }

@@ -17,6 +17,9 @@
       .sort((a, b) => a.position - b.position),
   )
 
+  const returnFocus = () =>
+    document.querySelector<HTMLElement>(`[data-project-id="${CSS.escape(projectId)}"]`)
+
   let chosen = $state<string | null>(null)
   const target = $derived(chosen ?? targets[0]?.id ?? null)
   let error = $state<string | null>(null)
@@ -44,7 +47,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="close-project-title"
-    use:dialogFocus={{ onEscape: onClose }}
+    use:dialogFocus={{ onEscape: onClose, returnFocus }}
   >
     <h2 id="close-project-title">Close project</h2>
     <p>{project?.name ?? 'This project'} has {openCount} open {openCount === 1 ? 'task' : 'tasks'}.</p>

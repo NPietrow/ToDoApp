@@ -21,6 +21,12 @@
     onClose: () => void
   } = $props()
 
+  // After a rename from the header's menu the opener is gone: go back to the header's name button.
+  const returnFocus = () =>
+    mode === 'rename' && projectId
+      ? document.querySelector<HTMLElement>(`[data-project-id="${CSS.escape(projectId)}"]`)
+      : null
+
   let name = $state(untrack(() => initialName))
   let error = $state<string | null>(null)
   let busy = $state(false)
@@ -49,7 +55,7 @@
 
 <div class="backdrop">
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-name-title"
-    use:dialogFocus={{ onEscape: onClose }}
+    use:dialogFocus={{ onEscape: onClose, returnFocus }}
   >
     <form onsubmit={submit}>
       <h2 id="project-name-title">{mode === 'rename' ? 'Rename project' : 'New project'}</h2>
