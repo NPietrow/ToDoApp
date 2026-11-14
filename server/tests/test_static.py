@@ -1,12 +1,7 @@
 """With the UI built, unmatched /api paths must still be a JSON 404 (not the static mount's 405)."""
 
-import warnings
-
 import pytest
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message=".*httpx.*starlette.testclient.*")
-    from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 from conftest import ORIGIN
 from todoapp.app import create_app

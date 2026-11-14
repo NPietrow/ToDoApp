@@ -1,11 +1,5 @@
-import warnings
-
 import pytest
-
-with warnings.catch_warnings():
-    # Starlette 1.x warns that its TestClient wants httpx2; httpx still works.
-    warnings.filterwarnings("ignore", message=".*httpx.*starlette.testclient.*")
-    from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 from todoapp.app import create_app
 from todoapp.config import AppSettings, RuntimeOptions
