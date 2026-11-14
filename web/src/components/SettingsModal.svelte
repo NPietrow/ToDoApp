@@ -29,7 +29,16 @@
     })
   })
 
+  // A drive path (C:\…), a network share (\\server\…) or, in Docker, a POSIX path (/data).
+  // The server checks again; a relative path would resolve against wherever it started.
+  const FULL_PATH = /^([A-Za-z]:[\\/]|[\\/]{2}|\/)/
+  const FULL_PATH_NEEDED = 'Use a full path, e.g. C:\\Users\\you\\Documents\\ToDoApp'
+
   async function useFolder() {
+    if (!FULL_PATH.test(folder)) {
+      folderError = FULL_PATH_NEEDED
+      return
+    }
     folderBusy = true
     folderError = null
     try {
@@ -88,6 +97,7 @@
         oninput={() => (folderDirty = true)} />
       <button type="button" class="btn" disabled={folderBusy} onclick={useFolder}>Use this folder</button>
     </div>
+    <p class="muted help">Nothing is moved; the board shows what's in the new folder.</p>
     {#if folderError}<p class="error" role="alert">{folderError}</p>{/if}
   </section>
 
@@ -178,6 +188,9 @@
     margin: 6px 0 0;
     color: var(--blocked-fg);
     overflow-wrap: anywhere;
+  }
+  .muted.help {
+    margin-top: 4px;
   }
   .muted {
     margin: 0;

@@ -12,6 +12,8 @@ from ..launcher import startup
 
 router = APIRouter(prefix="/api")
 
+FULL_PATH_NEEDED = "Use a full path, e.g. C:\\Users\\you\\Documents\\ToDoApp"
+
 
 @router.patch("/settings")
 def patch_settings(request: Request, patch: dict) -> dict:
@@ -19,6 +21,10 @@ def patch_settings(request: Request, patch: dict) -> dict:
     unknown = sorted(set(patch) - set(AppSettings.model_fields))
     if unknown:
         raise HTTPException(422, f"unknown settings: {', '.join(unknown)}")
+    if "data_dir" in patch and isinstance(patch["data_dir"], str):
+        # A relative path would resolve against wherever the server happened to start.
+        if not Path(patch["data_dir"]).is_absolute():
+            raise HTTPException(422, FULL_PATH_NEEDED)
     with ctx.lock:
         old = ctx.settings
         try:

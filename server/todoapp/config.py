@@ -57,7 +57,8 @@ def _port_from(value: str | None) -> int | None:
 def load_settings(
     path: Path | None = None, env: Mapping[str, str] | None = None
 ) -> AppSettings:
-    """Load settings; a missing, corrupt or invalid file gives defaults.
+    """Load settings; a missing or corrupt file gives defaults, and an invalid field
+    gives that field's default (the rest of the file, data_dir included, still counts).
 
     The file is never rewritten or deleted here. Valid TODOAPP_DATA_DIR and
     TODOAPP_PORT values override the file; invalid ones are ignored.
@@ -65,9 +66,20 @@ def load_settings(
     path = path if path is not None else default_config_path()
     env = env if env is not None else os.environ
     try:
-        settings = AppSettings.model_validate(read_json(path))
-    except (OSError, ValueError, ValidationError):
-        settings = AppSettings()
+        raw = read_json(path)
+    except (OSError, ValueError):
+        raw = {}
+    good: dict[str, object] = {}
+    if isinstance(raw, dict):
+        for key, value in raw.items():
+            if key not in AppSettings.model_fields:
+                continue
+            try:
+                AppSettings.model_validate({key: value})
+            except ValidationError:
+                continue  # just this field falls back to its default
+            good[key] = value
+    settings = AppSettings.model_validate(good)
     updates: dict[str, object] = {}
     if env.get("TODOAPP_DATA_DIR", "").strip():
         updates["data_dir"] = Path(env["TODOAPP_DATA_DIR"].strip())

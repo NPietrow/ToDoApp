@@ -75,3 +75,26 @@ def test_runtime_options_defaults_and_invalid():
     r = runtime_options({"TODOAPP_PUBLIC_PORT": "abc"}, frozen=True)
     assert (r.bind_host, r.public_port, r.windows_app) == ("127.0.0.1", None, True)
     assert runtime_options({"TODOAPP_PUBLIC_PORT": "70000"}).public_port is None
+
+
+def test_one_bad_field_falls_back_alone(tmp_path):
+    p = tmp_path / "settings.json"
+    p.write_text(json.dumps({
+        "data_dir": str(tmp_path / "real"),
+        "port": "eighty",  # a typo
+        "text_size": "large",
+        "collapsed_rows": ["notes", "bogus"],
+        "show_completed": True,
+        "unknown_key": 1,
+    }))
+    s = load_settings(p, env={})
+    assert s.data_dir == tmp_path / "real"
+    assert s.port == 8765 and s.collapsed_rows == []
+    assert s.text_size == "large" and s.show_completed is True
+    assert json.loads(p.read_text())["port"] == "eighty"  # never rewritten here
+
+
+def test_non_object_file_gives_defaults(tmp_path):
+    p = tmp_path / "settings.json"
+    p.write_text("[1, 2]")
+    assert load_settings(p, env={}) == load_settings(tmp_path / "missing.json", env={})

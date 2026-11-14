@@ -137,6 +137,16 @@ def test_skipped_inbox_items_survive_refreshes_until_the_processed_file_goes(cli
     assert client.get("/api/state").json()["problems"] == []
 
 
+def test_settings_patch_rejects_a_relative_data_dir(client, tmp_path):
+    before = client.app.state.ctx.settings.data_dir
+    for bad in ("ToDoApp", r"data\tasks", ""):
+        r = client.patch("/api/settings", json={"data_dir": bad})
+        assert r.status_code == 422
+        assert r.json()["detail"] == r"Use a full path, e.g. C:\Users\you\Documents\ToDoApp"
+    assert client.app.state.ctx.settings.data_dir == before
+    assert not (tmp_path / "config" / "settings.json").exists()
+
+
 def test_hand_edited_task_keeps_its_closed_project(client, tmp_path):
     pid = client.post("/api/projects", json={"name": "Old Job"}).json()["id"]
     client.post(f"/api/projects/{pid}/close")

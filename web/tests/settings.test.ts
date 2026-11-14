@@ -72,6 +72,22 @@ describe('settings', () => {
     expect(await screen.findByText('Folder does not exist')).toBeInTheDocument()
   })
 
+  test('Use this folder refuses a relative path without asking the server', async () => {
+    const patch = vi.spyOn(api, 'patchSettings').mockResolvedValue(app.settings)
+    render(SettingsModal)
+    expect(
+      screen.getByText("Nothing is moved; the board shows what's in the new folder."),
+    ).toBeInTheDocument()
+    const field = screen.getByRole('textbox', { name: 'Data folder' })
+    await user.clear(field)
+    await user.type(field, 'ToDoApp')
+    await user.click(screen.getByRole('button', { name: 'Use this folder' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Use a full path, e.g. C:\\Users\\you\\Documents\\ToDoApp',
+    )
+    expect(patch).not.toHaveBeenCalled()
+  })
+
   test('Use this folder patches data_dir', async () => {
     const patch = vi.spyOn(api, 'patchSettings').mockResolvedValue(app.settings)
     render(SettingsModal)
