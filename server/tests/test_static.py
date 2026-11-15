@@ -44,3 +44,22 @@ def test_unmatched_api_paths_are_json_404_not_405(built_client):
         assert r.status_code == 404, method
         assert r.json() == {"detail": "not found"}
         assert "access-control-allow-origin" not in r.headers
+
+
+def test_favicon_is_served_locally(tmp_path):
+    static = tmp_path / "static"
+    static.mkdir()
+    (static / "index.html").write_text(
+        '<!doctype html><link rel="icon" type="image/svg+xml" href="/favicon.svg">', encoding="utf-8"
+    )
+    (static / "favicon.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
+    app = create_app(
+        AppSettings(data_dir=tmp_path / "data"),
+        RuntimeOptions(),
+        config_path=tmp_path / "config" / "settings.json",
+        static_dir=static,
+    )
+    with TestClient(app, base_url=ORIGIN, headers={"Origin": ORIGIN}) as c:
+        assert 'href="/favicon.svg"' in c.get("/").text
+        r = c.get("/favicon.svg")
+        assert r.status_code == 200 and "image/svg+xml" in r.headers["content-type"]
