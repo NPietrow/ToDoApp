@@ -284,3 +284,51 @@ def test_hand_edited_file_keeps_a_closed_projects_id(tmp_path):
     )
     res = TaskRepository(tmp_path).scan([], known=[closed])
     assert {t.title: t.project_id for t in res.tasks}["Lost"] is None
+
+
+@pytest.mark.parametrize("version", [2, 2.0, "2", " 2.0 ", 3.5, "10"])
+def test_newer_schema_in_any_numeric_form_is_reported_and_never_rewritten(tmp_path, version):
+    (tmp_path / "tasks").mkdir(parents=True)
+    f = tmp_path / "tasks" / "future.json"
+    f.write_text(json.dumps({"schema_version": version, "title": "From the future"}), encoding="utf-8")
+    before = f.read_bytes()
+    res = TaskRepository(tmp_path).scan([])
+    assert res.tasks == []
+    assert [(p.file, p.error) for p in res.problems] == [
+        ("tasks/future.json", "written by a newer version of ToDoApp")
+    ]
+    assert f.read_bytes() == before and [p.name for p in (tmp_path / "tasks").iterdir()] == ["future.json"]
+
+
+@pytest.mark.parametrize("version", ["abc", "", None, True, 1, 1.0, "1", [2]])
+def test_other_schema_versions_keep_todays_behaviour(tmp_path, version):
+    (tmp_path / "tasks").mkdir(parents=True)
+    f = tmp_path / "tasks" / "hand.json"
+    f.write_text(json.dumps({"schema_version": version, "title": "Hand edited"}), encoding="utf-8")
+    res = TaskRepository(tmp_path).scan([])
+    assert [t.title for t in res.tasks] == ["Hand edited"] and res.problems == []
+
+
+def test_partial_files_are_left_alone_while_projects_are_unreadable(tmp_path):
+    from todoapp.models import Project, utcnow
+
+    proj = Project(id=new_id(), name="Alpha", colour="sage", position=0, status="active",
+                   created_at=utcnow(), closed_at=None)
+    (tmp_path / "tasks").mkdir(parents=True)
+    hand = tmp_path / "tasks" / "hand.json"
+    hand.write_text(json.dumps({"title": "Hand edited", "project_id": proj.id}), encoding="utf-8")
+    before = hand.read_bytes()
+    r = TaskRepository(tmp_path)
+    done = r.create("Complete one", proj.id)  # a full record still loads
+    res = r.scan([], known=[], projects_readable=False)
+    assert [t.id for t in res.tasks] == [done.id]
+    assert [p.file for p in res.problems] == ["tasks/hand.json"]
+    assert "projects.json" in res.problems[0].error
+    assert hand.read_bytes() == before and not any(
+        p.name != "hand.json" and p.name != f"{done.id}.json" for p in (tmp_path / "tasks").iterdir()
+    )
+    # projects readable again: the file is normalised and keeps its project
+    res = r.scan([proj], known=[proj])
+    assert sorted((t.title, t.project_id) for t in res.tasks) == [
+        ("Complete one", proj.id), ("Hand edited", proj.id)
+    ] and res.problems == []

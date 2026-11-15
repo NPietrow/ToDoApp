@@ -36,7 +36,14 @@ NEWER_VERSION = "written by a newer version of ToDoApp"
 def _is_newer(raw: object) -> bool:
     """True for a file from a later schema: it must be left exactly as it is."""
     v = raw.get("schema_version") if isinstance(raw, dict) else None
-    return isinstance(v, int) and not isinstance(v, bool) and v > SCHEMA_VERSION
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, str):  # "2" and "2.0" count; anything non-numeric keeps the old behaviour
+        try:
+            v = float(v)
+        except ValueError:
+            return False
+    return isinstance(v, (int, float)) and v > SCHEMA_VERSION
 
 
 @dataclass
@@ -129,9 +136,16 @@ class TaskRepository:
             raise ValueError(f"invalid project id: {project_id!r}")
 
     # -- scan -------------------------------------------------------------
-    def scan(self, active: Sequence[Project], known: Sequence[Project] | None = None) -> ScanResult:
+    def scan(
+        self,
+        active: Sequence[Project],
+        known: Sequence[Project] | None = None,
+        projects_readable: bool = True,
+    ) -> ScanResult:
         """`active` resolves project names; `known` (active and closed; defaults to `active`)
-        is the set of projects whose id a hand-edited file keeps."""
+        is the set of projects whose id a hand-edited file keeps. With `projects_readable`
+        False (projects.json can't be read) nothing is normalised or written: a file that
+        would need it is reported and left untouched until the projects are readable."""
         now = utcnow()
         tasks: dict[str, Task] = {}
         problems: list[FileProblem] = []
@@ -148,7 +162,7 @@ class TaskRepository:
             if hit and hit[0] == sig and not (isinstance(hit[1], Task) and hit[1].id in tasks):
                 result = hit[1]
             else:
-                result, transient = self._read_one(path, active, known, now, tasks)
+                result, transient = self._read_one(path, active, known, now, tasks, projects_readable)
                 if transient:
                     # environment problem (locked file, disk error): retry on the next scan
                     problems.append(result)
@@ -180,6 +194,7 @@ class TaskRepository:
         known: Sequence[Project] | None,
         now: datetime,
         seen: dict[str, Task],
+        projects_readable: bool = True,
     ) -> tuple[Task | FileProblem, bool]:
         """Returns (result, transient); a transient problem must not be cached."""
         rel = self._rel(path)
@@ -196,6 +211,11 @@ class TaskRepository:
             return FileProblem(rel, NEWER_VERSION), False  # never rewritten, renamed or loaded
         task = self._complete(raw)
         complete = task is not None
+        if not projects_readable and not (
+            complete and self._path(task.id) == path and task.id not in seen
+        ):
+            # Normalising now would resolve project names and ids against no projects at all.
+            return FileProblem(rel, "waiting for projects.json to be readable"), True
         if task is None:
             try:
                 task = normalise_task(raw, active, now, known=known)

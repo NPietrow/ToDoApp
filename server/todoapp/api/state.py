@@ -17,7 +17,11 @@ def state(request: Request) -> dict:
     ctx = request.app.state.ctx
     with ctx.lock:
         projects, projects_problem = ctx.read_projects()
-        scan = ctx.tasks.scan([p for p in projects if p.status == "active"], known=projects)
+        scan = ctx.tasks.scan(
+            [p for p in projects if p.status == "active"],
+            known=projects,
+            projects_readable=projects_problem is None,
+        )
         notes, notes_problems = ctx.notes.all(p.id for p in projects)
         problems = [
             *([projects_problem] if projects_problem else []),

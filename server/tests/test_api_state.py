@@ -156,3 +156,26 @@ def test_hand_edited_task_keeps_its_closed_project(client, tmp_path):
     client.app.state.ctx.refresh()
     [t] = client.get("/api/state").json()["tasks"]
     assert t["project_id"] == pid
+
+
+def test_partial_task_file_keeps_its_project_while_projects_are_unreadable(make_client, tmp_path):
+    from todoapp.models import new_id
+
+    pid = new_id()
+    (tmp_path / "data/tasks").mkdir(parents=True)
+    (tmp_path / "data/projects.json").write_text("{bad")
+    hand = tmp_path / "data/tasks/hand.json"
+    hand.write_text(json.dumps({"title": "Hand edited", "project_id": pid}))
+    before = hand.read_bytes()
+    c = make_client()
+    body = c.get("/api/state").json()
+    assert body["tasks"] == [] and hand.read_bytes() == before
+    assert {p["file"] for p in body["problems"]} == {"projects.json", "tasks/hand.json"}
+    c.app.state.ctx.refresh()
+    assert hand.read_bytes() == before
+    (tmp_path / "data/projects.json").write_text(json.dumps({"schema_version": 1, "projects": [{
+        "id": pid, "name": "Alpha", "colour": "sage", "position": 0, "status": "active",
+        "created_at": "2026-11-01T09:00:00+00:00", "closed_at": None}]}))
+    c.app.state.ctx.refresh()
+    tasks = c.get("/api/state").json()["tasks"]
+    assert [(t["title"], t["project_id"]) for t in tasks] == [("Hand edited", pid)]

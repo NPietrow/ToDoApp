@@ -111,7 +111,7 @@ class AppContext:
                 # Hold the inbox: importing now would lose project assignments.
                 self.inbox_problems = []
             self.import_problems = {f: ps for f, ps in self.import_problems.items() if (d / f).is_file()}
-            self.tasks.scan(active, known=projects)
+            self.tasks.scan(active, known=projects, projects_readable=problem is None)
         self.bus.publish("changed")
 
     def all_inbox_problems(self) -> list[FileProblem]:
