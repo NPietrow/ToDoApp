@@ -1,10 +1,12 @@
 <script lang="ts">
-  // Paste text from anywhere (an AI reply, an email, a list); the server's lenient intake reads
-  // it. A debounced preview shows what would be created, then Import creates it.
+  // Paste an AI reply that contains the tasks as JSON (chat around it is fine); the server's
+  // intake pulls the JSON out. A debounced preview shows what would be created, then Import
+  // creates it. "Copy AI prompt" gives the user a prompt that makes an AI reply that way.
   import { onDestroy } from 'svelte'
+  import { buildAiPrompt, buildExample } from '../lib/aiPrompt'
   import { importIntake, previewIntake } from '../lib/api'
   import { plainPaste } from '../lib/paste'
-  import { refresh } from '../lib/state.svelte'
+  import { app, refresh } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
   import { TASK_TYPES, type PreviewResult } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
@@ -21,6 +23,19 @@
   let timer: ReturnType<typeof setTimeout> | undefined
   let seq = 0
 
+  const activeProjects = $derived(
+    app.projects.filter((p) => p.status === 'active').sort((a, b) => a.position - b.position),
+  )
+  const example = $derived(buildExample(activeProjects[0]?.name, app.today))
+  let copied = $state(false)
+  let promptToCopy = $state<string | null>(null) // shown for copying by hand if the clipboard refuses
+  const noTasks = $derived(previewError !== null && /no tasks found/i.test(previewError))
+  const errorText = $derived(
+    noTasks
+      ? 'No JSON tasks found. Ask your AI for JSON (Copy AI prompt), or see the example below.'
+      : previewError,
+  )
+
   const items = $derived(preview?.items ?? [])
   const ready = $derived(items.length > 0 && previewedText === text && !busy)
   const summary = $derived.by(() => {
@@ -34,6 +49,7 @@
   })
 
   function onInput() {
+    copied = false
     clearTimeout(timer)
     timer = setTimeout(() => void runPreview(text), DEBOUNCE_MS)
   }
@@ -59,6 +75,25 @@
     previewedText = forText
   }
 
+  function useExample() {
+    text = example
+    copied = false
+    clearTimeout(timer)
+    void runPreview(text)
+  }
+
+  async function copyPrompt() {
+    const prompt = buildAiPrompt(activeProjects.map((p) => p.name))
+    try {
+      await navigator.clipboard.writeText(prompt)
+      copied = true
+      promptToCopy = null
+    } catch {
+      copied = false
+      promptToCopy = prompt
+    }
+  }
+
   onDestroy(() => {
     clearTimeout(timer)
     seq++
@@ -82,8 +117,18 @@
 
 <Modal name="paste" title="Paste tasks">
   <textarea aria-label="Paste tasks" rows="7" data-autofocus bind:value={text} oninput={onInput}
-    use:plainPaste={{ multiline: true }} placeholder="Paste a list, an email or an AI reply…"
+    use:plainPaste={{ multiline: true }} placeholder="Paste an AI reply that contains the tasks as JSON. Chat around it is fine."
   ></textarea>
+
+  {#if text === '' || noTasks}
+    <div class="example">
+      <div class="example-head">
+        <span class="example-title">Example</span>
+        <button type="button" class="link" onclick={useExample}>Use this example</button>
+      </div>
+      <pre>{example}</pre>
+    </div>
+  {/if}
 
   {#if preview && items.length > 0}
     <p class="summary">{summary}</p>
@@ -101,9 +146,17 @@
       {#each preview.errors as e, i (i)}<li>{e}</li>{/each}
     </ul>
   {/if}
-  {#if previewError}<p class="errors" role="alert">{previewError}</p>{/if}
+  {#if errorText}<p class="errors" role="alert">{errorText}</p>{/if}
+
+  {#if promptToCopy}
+    <p class="hint">Couldn't use the clipboard. Select this prompt and copy it by hand.</p>
+    <textarea aria-label="AI prompt" rows="6" readonly value={promptToCopy}
+      onfocus={(e) => e.currentTarget.select()}></textarea>
+  {/if}
 
   <div class="actions">
+    <button type="button" class="btn copy" onclick={() => void copyPrompt()}
+      >{copied ? 'Copied' : 'Copy AI prompt'}</button>
     <button type="button" class="btn" onclick={() => (ui.modal = null)}>Cancel</button>
     <button type="button" class="btn primary" disabled={!ready} onclick={doImport}>Import</button>
   </div>
@@ -141,6 +194,47 @@
   .errors {
     color: var(--blocked-fg);
     overflow-wrap: anywhere;
+  }
+  .example {
+    margin-top: 10px;
+    color: #8a8a8a;
+    font-size: 0.9em;
+  }
+  .example-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .example-title {
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .example pre {
+    margin: 4px 0 0;
+    font-family: ui-monospace, Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--text);
+  }
+  .hint {
+    margin: 10px 0 4px;
+    color: #8a8a8a;
+    font-size: 0.9em;
+  }
+  .copy {
+    margin-right: auto;
   }
   .actions {
     display: flex;

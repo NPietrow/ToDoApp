@@ -5,10 +5,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import PasteTasksModal from '../src/components/PasteTasksModal.svelte'
 import * as api from '../src/lib/api'
+import { ApiError } from '../src/lib/api'
 import { clearToast, toast } from '../src/lib/toast.svelte'
 import type { PreviewResult } from '../src/lib/types'
 import { ui } from '../src/lib/ui.svelte'
-import { fixtureState, makeTask, resetApp } from './fixtures'
+import { app } from '../src/lib/state.svelte'
+import { fixtureState, makeProject, makeTask, resetApp } from './fixtures'
 
 const CHAT = 'Sure! Here are your tasks:\n- Chase Sam (Line 4 Bid)\n- Buy milk'
 const PREVIEW: PreviewResult = {
@@ -98,5 +100,101 @@ describe('paste tasks modal', () => {
     render(PasteTasksModal)
     await user.keyboard('{Escape}')
     expect(ui.modal).toBeNull()
+  })
+
+  test('the placeholder says it wants JSON from an AI reply', () => {
+    render(PasteTasksModal)
+    expect(screen.getByRole('textbox', { name: 'Paste tasks' })).toHaveAttribute(
+      'placeholder',
+      'Paste an AI reply that contains the tasks as JSON. Chat around it is fine.',
+    )
+  })
+
+  test('the example names the first active project and a date 14 days on, and goes when typing starts', async () => {
+    app.projects = [
+      makeProject({ id: 'c', name: 'Closed One', status: 'closed', position: 0 }),
+      makeProject({ id: 'b', name: 'Second', position: 1 }),
+      makeProject({ id: 'a', name: 'First "Quoted"', position: 0 }),
+    ]
+    render(PasteTasksModal)
+    const example = screen.getByText(/Here are your actions:/)
+    expect(screen.getByText('Example')).toBeInTheDocument()
+    expect(example.tagName).toBe('PRE')
+    const body = example.textContent ?? ''
+    expect(body).toContain('"project": "First \\"Quoted\\""')
+    expect(body).toContain('"due_date": "2026-11-27"') // TODAY is 2026-11-13
+    expect(JSON.parse(body.slice(body.indexOf('[')))).toHaveLength(2) // real JSON
+    await user.click(screen.getByRole('textbox', { name: 'Paste tasks' }))
+    await user.keyboard('x')
+    expect(screen.queryByText('Example')).toBeNull()
+  })
+
+  test('the example falls back to Twin Pilot with no projects', () => {
+    app.projects = []
+    render(PasteTasksModal)
+    expect(screen.getByText(/Here are your actions:/).textContent).toContain('"project": "Twin Pilot"')
+  })
+
+  test('Use this example fills the box and previews it', async () => {
+    render(PasteTasksModal)
+    const shown = screen.getByText(/Here are your actions:/).textContent
+    await user.click(screen.getByRole('button', { name: 'Use this example' }))
+    expect(screen.getByRole('textbox', { name: 'Paste tasks' })).toHaveValue(shown)
+    expect(preview).toHaveBeenCalledWith(shown)
+    expect(await screen.findByText('2 tasks → Line 4 Bid ×1, Unsorted ×1')).toBeInTheDocument()
+    expect(screen.queryByText('Example')).toBeNull()
+  })
+
+  test('Copy AI prompt copies the prompt with the active project names, then reads Copied', async () => {
+    app.projects = [
+      makeProject({ id: 'a', name: 'Twin Pilot', position: 0 }),
+      makeProject({ id: 'b', name: 'Data Platform', position: 1 }),
+      makeProject({ id: 'c', name: 'Old Job', status: 'closed', position: 2 }),
+    ]
+    render(PasteTasksModal)
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    await user.click(screen.getByRole('button', { name: 'Copy AI prompt' }))
+    expect(write).toHaveBeenCalledTimes(1)
+    const prompt = write.mock.calls[0][0]
+    expect(prompt).toContain('Use these project names exactly: Twin Pilot, Data Platform.')
+    expect(prompt).not.toContain('[your project names]')
+    expect(prompt).not.toContain('Old Job')
+    expect(prompt).toContain('Reply with only the JSON.')
+    expect(prompt).toContain('"title"') // the inline shape, so no schema file is needed
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    // typing puts the button back
+    await user.click(screen.getByRole('textbox', { name: 'Paste tasks' }))
+    await user.keyboard('x')
+    expect(screen.getByRole('button', { name: 'Copy AI prompt' })).toBeInTheDocument()
+  })
+
+  test('if the clipboard refuses, the prompt is shown to copy by hand', async () => {
+    render(PasteTasksModal)
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
+    await user.click(screen.getByRole('button', { name: 'Copy AI prompt' }))
+    const box = await screen.findByRole('textbox', { name: 'AI prompt' })
+    expect(box).toHaveAttribute('readonly')
+    expect((box as HTMLTextAreaElement).value).toContain('Use these project names exactly: Twin Pilot, Data Platform.')
+    expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull()
+  })
+
+  test('"no tasks found" gets a friendlier line', async () => {
+    preview.mockRejectedValue(new ApiError(422, 'no tasks found'))
+    render(PasteTasksModal)
+    await user.click(screen.getByRole('textbox', { name: 'Paste tasks' }))
+    await user.paste('Just some chat, no JSON')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No JSON tasks found. Ask your AI for JSON (Copy AI prompt), or see the example below.',
+    )
+    expect(screen.queryByText('no tasks found')).toBeNull()
+    expect(screen.getByText('Example')).toBeInTheDocument() // the line points at it
+  })
+
+  test('other preview errors are shown as they are', async () => {
+    preview.mockRejectedValue(new ApiError(500, 'disk on fire'))
+    render(PasteTasksModal)
+    await user.click(screen.getByRole('textbox', { name: 'Paste tasks' }))
+    await user.paste('x')
+    expect(await screen.findByRole('alert')).toHaveTextContent('disk on fire')
   })
 })
