@@ -24,3 +24,8 @@ packaging/icon.ico
 
 # Claude Code: personal settings stay local (launch.json is shared)
 .claude/settings.local.json
+
+# Local context only, not published
+CLAUDE.md
+idea-brain-dump.md
+docs/superpowers/

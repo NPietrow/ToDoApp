@@ -179,7 +179,6 @@ web/src/               Svelte UI
 web/tests/             Vitest unit tests
 web/e2e/               Playwright end-to-end tests (run on Microsoft Edge)
 docs/ai-intake/        The task intake format for AI tools
-docs/superpowers/      The design spec and the stage 1 build plan
 scripts/build-exe.ps1  Builds dist/ToDoApp.exe with PyInstaller
 ```
 
@@ -201,7 +200,7 @@ npm --prefix web run build                 # build the UI (needed by the next li
 npm --prefix web run e2e                   # end-to-end tests on Edge, own server on port 8799
 ```
 
-The full design, including the planned later stages (Today, Kanban, Table and Stats views), is in [docs/superpowers/specs/2026-11-13-todoapp-design.md](docs/superpowers/specs/2026-11-13-todoapp-design.md). The code was written with Claude Code, from a design and decisions made by the author.
+Later stages are planned to add the Today, Kanban, Table and Stats views. The code was written with Claude Code, from a design and decisions made by the author.
 
 ## Licence
 
