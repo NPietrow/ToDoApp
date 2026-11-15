@@ -95,17 +95,21 @@
 <Modal name="settings" title="Settings">
   <section>
     <label for="data-dir">Data folder</label>
+    <p class="desc">
+      Where your tasks, notes and inbox live. Nothing is moved; the board shows what's in the new
+      folder.
+    </p>
     <div class="row">
       <input id="data-dir" type="text" autocomplete="off" bind:value={folder}
         oninput={() => (folderDirty = true)} />
       <button type="button" class="btn" disabled={folderBusy} onclick={useFolder}>Use this folder</button>
     </div>
-    <p class="muted help">Nothing is moved; the board shows what's in the new folder.</p>
     {#if folderError}<p class="error" role="alert">{folderError}</p>{/if}
   </section>
 
   <section>
     <span class="label" id="lbl-size">Text size</span>
+    <p class="desc">Changes the size of all text on the board.</p>
     <span class="seg" role="group" aria-labelledby="lbl-size">
       {#each SIZES as s (s.key)}
         <button type="button" class:on={app.settings.text_size === s.key}
@@ -117,6 +121,8 @@
 
   {#if app.windows_app}
     <section>
+      <span class="label">Start-up</span>
+      <p class="desc">Opens ToDoApp in the background when you sign in to Windows.</p>
       <label class="check">
         <input type="checkbox" checked={app.settings.start_at_login}
           onchange={(e) => void setSetting('start_at_login', e.currentTarget.checked)} />
@@ -127,6 +133,9 @@
 
   <section>
     <span class="label">Closed projects</span>
+    <p class="desc">
+      Closed projects are hidden from the board. Reopen one to bring it back with its tasks.
+    </p>
     {#if closed.length === 0}
       <p class="muted">None.</p>
     {:else}
@@ -147,6 +156,7 @@
 
   <section>
     <span class="label">Trash</span>
+    <p class="desc">Deleted tasks are kept in the trash until you empty it.</p>
     {#if confirming}
       <span class="row">
         <span>Delete trashed tasks permanently?</span>
@@ -196,8 +206,10 @@
     color: var(--blocked-fg);
     overflow-wrap: anywhere;
   }
-  .muted.help {
-    margin-top: 4px;
+  .desc {
+    margin: 0 0 6px;
+    color: #8a8a8a;
+    font-size: 0.9em;
   }
   .muted {
     margin: 0;

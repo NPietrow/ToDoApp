@@ -156,7 +156,7 @@ export function projectMenuItems(
         action: () => void attempt('change colour', () => patchProject(project.id, { colour: key })),
       })),
     },
-    { label: 'Close project', action: h.close },
+    { label: 'Close project', danger: true, action: h.close },
   ]
 }
 

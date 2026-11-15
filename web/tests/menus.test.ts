@@ -286,6 +286,8 @@ describe('project header menu', () => {
       'Change colour ▸',
       'Close project',
     ])
+    expect(screen.getByRole('menuitem', { name: 'Close project' })).toHaveClass('danger')
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).not.toHaveClass('danger')
     await user.click(screen.getByRole('menuitem', { name: 'Change colour ▸' }))
     const sub = screen.getAllByRole('menu')[1]
     expect(within(sub).getAllByRole('menuitem')).toHaveLength(10)

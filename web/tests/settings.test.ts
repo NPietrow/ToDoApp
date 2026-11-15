@@ -53,6 +53,28 @@ describe('settings', () => {
     expect(screen.queryByLabelText('Start when I log in')).toBeNull()
   })
 
+  test('every section has a heading and its one-line description', () => {
+    app.windows_app = true
+    render(SettingsModal)
+    const sections: [string, string][] = [
+      ['Data folder', "Where your tasks, notes and inbox live. Nothing is moved; the board shows what's in the new folder."],
+      ['Text size', 'Changes the size of all text on the board.'],
+      ['Start-up', 'Opens ToDoApp in the background when you sign in to Windows.'],
+      ['Closed projects', 'Closed projects are hidden from the board. Reopen one to bring it back with its tasks.'],
+      ['Trash', 'Deleted tasks are kept in the trash until you empty it.'],
+    ]
+    for (const [heading, description] of sections) {
+      const h = screen.getByText(heading, { selector: 'label, .label' })
+      expect(h.nextElementSibling).toHaveTextContent(description)
+    }
+  })
+
+  test('the Start-up section is absent unless this is the Windows app', () => {
+    render(SettingsModal)
+    expect(screen.queryByText('Start-up')).toBeNull()
+    expect(screen.queryByText('Opens ToDoApp in the background when you sign in to Windows.')).toBeNull()
+  })
+
   test('Start when I log in persists when present', async () => {
     app.windows_app = true
     const patch = vi.spyOn(api, 'patchSettings').mockResolvedValue(app.settings)
@@ -76,8 +98,11 @@ describe('settings', () => {
     const patch = vi.spyOn(api, 'patchSettings').mockResolvedValue(app.settings)
     render(SettingsModal)
     expect(
-      screen.getByText("Nothing is moved; the board shows what's in the new folder."),
+      screen.getByText(
+        "Where your tasks, notes and inbox live. Nothing is moved; the board shows what's in the new folder.",
+      ),
     ).toBeInTheDocument()
+    expect(screen.getAllByText(/Nothing is moved/)).toHaveLength(1)
     const field = screen.getByRole('textbox', { name: 'Data folder' })
     await user.clear(field)
     await user.type(field, 'ToDoApp')
