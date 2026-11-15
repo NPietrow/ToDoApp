@@ -1,8 +1,13 @@
-import { eventsUrl, getState } from './api'
+import { eventsUrl, getState, serverAnswers } from './api'
 import { localToday } from './dates'
 import type { AppState, Task } from './types'
 
-export const app: AppState & { today: string; loaded: boolean; loadError: string | null } = $state({
+export const app: AppState & {
+  today: string
+  loaded: boolean
+  loadError: string | null
+  serverStopped: boolean
+} = $state({
   projects: [],
   tasks: [],
   notes: {},
@@ -21,6 +26,8 @@ export const app: AppState & { today: string; loaded: boolean; loadError: string
   loaded: false,
   /** Why the first load failed; null once the board has loaded. */
   loadError: null,
+  /** The server has gone (tray Quit with this window left open, or a crash). */
+  serverStopped: false,
 })
 
 /**
@@ -73,23 +80,40 @@ export function refresh(): Promise<void> {
   return running
 }
 
-/** Subscribe to the server's change events. Returns a cleanup that closes the connection. */
+/**
+ * Subscribe to the server's change events. Returns a cleanup that closes the connection.
+ * When the stream drops, `isUp` checks whether the server still answers: if not, the board is
+ * replaced by a "ToDoApp isn't running" message until the stream reconnects (EventSource retries
+ * on its own, so starting ToDoApp again on the same port brings the window back).
+ */
 export function connectEvents(
   make: (url: string) => EventSource = (url) => new EventSource(url),
+  isUp: () => Promise<boolean> = serverAnswers,
 ): () => void {
   const es = make(eventsUrl)
   let hadError = false
+  let connected = false
+  let closed = false
   es.addEventListener('changed', () => void refresh())
   es.addEventListener('error', () => {
     hadError = true
+    connected = false
+    void isUp().then((up) => {
+      if (!up && !connected && !closed) app.serverStopped = true
+    })
   })
   es.addEventListener('open', () => {
+    connected = true
+    app.serverStopped = false
     if (hadError) {
       hadError = false
       void refresh() // changes may have been missed while disconnected
     }
   })
-  return () => es.close()
+  return () => {
+    closed = true
+    es.close()
+  }
 }
 
 /**

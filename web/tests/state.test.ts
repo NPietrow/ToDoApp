@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import * as api from '../src/lib/api'
 import { ApiError } from '../src/lib/api'
 import { app, connectEvents, refresh, startDayWatch } from '../src/lib/state.svelte'
@@ -186,4 +186,61 @@ test('toast shows one at a time and clears itself after the delay', () => {
   expect(toast.current?.message).toBe('two')
   vi.advanceTimersByTime(2001)
   expect(toast.current).toBeNull()
+})
+
+describe('server stopped (tray Quit with the window left open)', () => {
+  beforeEach(() => {
+    app.serverStopped = false
+  })
+
+  test('an error with the health check failing marks the server stopped; reconnecting clears it', async () => {
+    vi.spyOn(api, 'getState').mockResolvedValue(EMPTY_STATE)
+    let es!: FakeES
+    const stop = connectEvents(
+      (url) => (es = new FakeES(url)) as unknown as EventSource,
+      async () => false,
+    )
+    es.fire('open')
+    es.fire('error')
+    await vi.waitFor(() => expect(app.serverStopped).toBe(true))
+    es.fire('open') // the server is back on the same port
+    expect(app.serverStopped).toBe(false)
+    stop()
+  })
+
+  test('an error while the server still answers is only a blip', async () => {
+    let es!: FakeES
+    let probed = 0
+    const stop = connectEvents(
+      (url) => (es = new FakeES(url)) as unknown as EventSource,
+      async () => (probed++, true),
+    )
+    es.fire('error')
+    await vi.waitFor(() => expect(probed).toBe(1))
+    await Promise.resolve()
+    expect(app.serverStopped).toBe(false)
+    stop()
+  })
+
+  test('a stale failed check after reconnecting, or after cleanup, changes nothing', async () => {
+    vi.spyOn(api, 'getState').mockResolvedValue(EMPTY_STATE)
+    let es!: FakeES
+    const pending: Array<(up: boolean) => void> = []
+    const stop = connectEvents(
+      (url) => (es = new FakeES(url)) as unknown as EventSource,
+      () => new Promise<boolean>((resolve) => pending.push(resolve)),
+    )
+    es.fire('error')
+    es.fire('open') // reconnected before the check came back
+    pending[0](false)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(app.serverStopped).toBe(false)
+    es.fire('error')
+    stop()
+    pending[1](false)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(app.serverStopped).toBe(false)
+  })
 })

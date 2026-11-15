@@ -96,6 +96,16 @@ def _show_window(url: str) -> None:
         browser.open_app_window(url)
 
 
+def _quit_app(server) -> None:
+    """Tray Quit: close the app window first (it would sit there dead, failing every click; closing
+    it also ends its event stream, so shutdown isn't held up), then stop the server."""
+    try:
+        browser.close_app_windows()
+    except Exception:  # never let a window problem stop Quit
+        pass
+    server.should_exit = True
+
+
 def _quiet_missing_streams() -> None:
     # A windowed exe has no console: sys.stdout/sys.stderr are None, and anything that
     # writes to them would crash. Send stray output nowhere; real logs go to the log file.
@@ -204,10 +214,7 @@ def _run_windows_app(
     if not args.no_browser:
         browser.open_app_window(url)
 
-    def quit_app() -> None:
-        server.should_exit = True
-
-    tray.run_tray(on_open=lambda: _show_window(url), on_quit=quit_app)
+    tray.run_tray(on_open=lambda: _show_window(url), on_quit=lambda: _quit_app(server))
     server.should_exit = True
     thread.join(timeout=10)
     return 0

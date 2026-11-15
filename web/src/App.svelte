@@ -33,7 +33,12 @@
   })
 </script>
 
-{#if app.loaded}
+{#if app.serverStopped}
+  <div class="load-error" role="alert">
+    <p><strong>ToDoApp isn't running.</strong> Start it again and this window reconnects by itself.</p>
+    <p class="muted">Anything you'd typed but not saved here is lost. Saved tasks are safe.</p>
+  </div>
+{:else if app.loaded}
   <div class="app">
     <TopBar />
     <Grid />
@@ -64,6 +69,9 @@
   .loading {
     margin: 16px;
     color: #a3a3a3;
+  }
+  .load-error p.muted {
+    color: #737373;
   }
   .load-error {
     margin: 16px;

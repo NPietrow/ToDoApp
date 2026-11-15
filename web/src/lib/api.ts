@@ -12,6 +12,16 @@ import type {
 
 export const eventsUrl = '/api/events'
 
+/** True if the ToDoApp server answers at all; false when nothing is listening (it has stopped). */
+export async function serverAnswers(): Promise<boolean> {
+  try {
+    await fetch('/api/health', { cache: 'no-store' })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export class ApiError extends Error {
   status: number
 

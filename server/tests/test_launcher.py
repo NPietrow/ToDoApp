@@ -234,3 +234,36 @@ def test_start_at_login_patch_outside_windows_app_leaves_shortcut_alone(make_cli
     r = c.patch("/api/settings", json={"start_at_login": True})
     assert r.status_code == 200 and r.json()["start_at_login"] is True
     assert shortcut_calls == []
+
+
+# --- Quit closes the app window (tray Quit used to leave a dead Edge window behind) ---
+
+
+def test_quit_app_closes_window_before_stopping_server(monkeypatch):
+    server = SimpleNamespace(should_exit=False)
+    seen: list[bool] = []
+    monkeypatch.setattr(browser, "close_app_windows", lambda title="ToDoApp": seen.append(server.should_exit) or 1)
+    launcher_main._quit_app(server)
+    assert seen == [False]  # the window is asked to close while the server is still up
+    assert server.should_exit is True
+
+
+def test_quit_app_stops_server_even_if_closing_window_fails(monkeypatch):
+    server = SimpleNamespace(should_exit=False)
+
+    def boom(title="ToDoApp"):
+        raise OSError("no window station")
+
+    monkeypatch.setattr(browser, "close_app_windows", boom)
+    launcher_main._quit_app(server)
+    assert server.should_exit is True
+
+
+def test_close_app_windows_is_a_no_op_off_windows(monkeypatch):
+    monkeypatch.setattr(browser.sys, "platform", "linux")
+    assert browser.close_app_windows() == 0
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows window enumeration")
+def test_close_app_windows_ignores_other_titles():
+    assert browser.close_app_windows("ToDoApp test window that does not exist 7f3a") == 0
