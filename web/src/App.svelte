@@ -33,21 +33,20 @@
   })
 </script>
 
-{#if app.serverStopped}
-  <div class="load-error" role="alert">
-    <p><strong>ToDoApp isn't running.</strong> Start it again and this window reconnects by itself.</p>
-    <p class="muted">Anything you'd typed but not saved here is lost. Saved tasks are safe.</p>
+{#if app.loaded}
+  <!-- While the server is away the board is covered and inert, not removed: removing it would
+       throw away a half-typed note or task if the "stopped" check was a false alarm. -->
+  <div class="board" inert={app.serverStopped}>
+    <div class="app">
+      <TopBar />
+      <Grid />
+    </div>
+    {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
+    {#if ui.modal === 'paste'}<PasteTasksModal />
+    {:else if ui.modal === 'settings'}<SettingsModal />
+    {:else if ui.modal === 'unsorted'}<UnsortedTray />
+    {:else if ui.modal === 'problems'}<ProblemsList />{/if}
   </div>
-{:else if app.loaded}
-  <div class="app">
-    <TopBar />
-    <Grid />
-  </div>
-  {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
-  {#if ui.modal === 'paste'}<PasteTasksModal />
-  {:else if ui.modal === 'settings'}<SettingsModal />
-  {:else if ui.modal === 'unsorted'}<UnsortedTray />
-  {:else if ui.modal === 'problems'}<ProblemsList />{/if}
 {:else if app.loadError}
   <div class="load-error" role="alert">
     <p>Couldn't load the board: {app.loadError}</p>
@@ -55,6 +54,12 @@
   </div>
 {:else}
   <p class="loading">Loading…</p>
+{/if}
+{#if app.serverStopped}
+  <div class="stopped" role="alert">
+    <p><strong>ToDoApp isn't running.</strong> Start it again and this window reconnects by itself.</p>
+    <p class="muted">Saved tasks are safe. Changes made since it stopped may not have been saved.</p>
+  </div>
 {/if}
 <Toast />
 
@@ -70,7 +75,22 @@
     margin: 16px;
     color: #a3a3a3;
   }
-  .load-error p.muted {
+  .board {
+    display: contents;
+  }
+  .stopped {
+    position: fixed;
+    inset: 0;
+    z-index: 200; /* above modals (10), menus (50) and the toast (100) */
+    background: var(--bg);
+    padding: 16px;
+    overflow-wrap: anywhere;
+  }
+  .stopped p {
+    margin: 0 0 8px;
+    color: var(--blocked-fg);
+  }
+  .stopped p.muted {
     color: #737373;
   }
   .load-error {

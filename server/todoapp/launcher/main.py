@@ -96,12 +96,24 @@ def _show_window(url: str) -> None:
         browser.open_app_window(url)
 
 
-def _quit_app(server) -> None:
-    """Tray Quit: close the app window first (it would sit there dead, failing every click; closing
-    it also ends its event stream, so shutdown isn't held up), then stop the server."""
+# Quit waits for the app window to close before stopping the server: the closing page sends its
+# last notes/task save (a keepalive request on pagehide), which needs the server still up.
+QUIT_POLL_S = 0.05
+QUIT_WAIT_S = 3.0
+QUIT_GRACE_S = 0.5
+
+
+def _quit_app(server, *, sleep=time.sleep, now=time.monotonic) -> None:
+    """Tray Quit: close the app window (it would otherwise sit there dead, failing every click),
+    wait until it has gone plus a grace for its final save, then stop the server. Runs on the
+    tray thread, so waiting here blocks nothing else. Window problems never stop Quit."""
     try:
-        browser.close_app_windows()
-    except Exception:  # never let a window problem stop Quit
+        if browser.close_app_windows():
+            deadline = now() + QUIT_WAIT_S
+            while browser.app_windows_open() and now() < deadline:
+                sleep(QUIT_POLL_S)
+            sleep(QUIT_GRACE_S)
+    except Exception:
         pass
     server.should_exit = True
 

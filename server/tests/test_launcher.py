@@ -239,12 +239,54 @@ def test_start_at_login_patch_outside_windows_app_leaves_shortcut_alone(make_cli
 # --- Quit closes the app window (tray Quit used to leave a dead Edge window behind) ---
 
 
-def test_quit_app_closes_window_before_stopping_server(monkeypatch):
+class _FakeClock:
+    def __init__(self):
+        self.t = 0.0
+        self.sleeps: list[float] = []
+
+    def now(self) -> float:
+        return self.t
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.t += seconds
+
+
+def test_quit_app_waits_for_the_window_to_close_then_a_grace_before_stopping(monkeypatch):
+    # The closing page sends its last notes/task save (keepalive) on pagehide: the server must
+    # still be up for that, so Quit waits for the window to go, plus a grace, before stopping.
     server = SimpleNamespace(should_exit=False)
-    seen: list[bool] = []
-    monkeypatch.setattr(browser, "close_app_windows", lambda title="ToDoApp": seen.append(server.should_exit) or 1)
-    launcher_main._quit_app(server)
-    assert seen == [False]  # the window is asked to close while the server is still up
+    clock = _FakeClock()
+    still_open = iter([True, True, False])
+    monkeypatch.setattr(browser, "close_app_windows", lambda title="ToDoApp": 1)
+    monkeypatch.setattr(browser, "app_windows_open", lambda title="ToDoApp": next(still_open))
+    real_sleep = clock.sleep
+
+    def sleep(seconds):
+        assert server.should_exit is False  # nothing stopped while we wait
+        real_sleep(seconds)
+
+    launcher_main._quit_app(server, sleep=sleep, now=clock.now)
+    assert clock.sleeps == [launcher_main.QUIT_POLL_S, launcher_main.QUIT_POLL_S, launcher_main.QUIT_GRACE_S]
+    assert server.should_exit is True
+
+
+def test_quit_app_gives_up_waiting_after_the_timeout(monkeypatch):
+    server = SimpleNamespace(should_exit=False)
+    clock = _FakeClock()
+    monkeypatch.setattr(browser, "close_app_windows", lambda title="ToDoApp": 1)
+    monkeypatch.setattr(browser, "app_windows_open", lambda title="ToDoApp": True)  # never closes
+    launcher_main._quit_app(server, sleep=clock.sleep, now=clock.now)
+    assert clock.t <= launcher_main.QUIT_WAIT_S + launcher_main.QUIT_POLL_S + launcher_main.QUIT_GRACE_S + 1e-9
+    assert server.should_exit is True
+
+
+def test_quit_app_with_no_window_stops_at_once(monkeypatch):
+    server = SimpleNamespace(should_exit=False)
+    clock = _FakeClock()
+    monkeypatch.setattr(browser, "close_app_windows", lambda title="ToDoApp": 0)
+    launcher_main._quit_app(server, sleep=clock.sleep, now=clock.now)
+    assert clock.sleeps == []
     assert server.should_exit is True
 
 
@@ -262,6 +304,7 @@ def test_quit_app_stops_server_even_if_closing_window_fails(monkeypatch):
 def test_close_app_windows_is_a_no_op_off_windows(monkeypatch):
     monkeypatch.setattr(browser.sys, "platform", "linux")
     assert browser.close_app_windows() == 0
+    assert browser.app_windows_open() is False
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows window enumeration")

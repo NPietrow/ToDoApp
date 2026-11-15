@@ -121,3 +121,10 @@ def close_app_windows(title: str = "ToDoApp") -> int:
     for hwnd in found:
         user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
     return len(found)
+
+
+def app_windows_open(title: str = "ToDoApp") -> bool:
+    """Whether any visible browser window titled exactly `title` is still open. Windows only."""
+    if sys.platform != "win32":
+        return False
+    return bool(_app_windows(title))
