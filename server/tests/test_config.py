@@ -98,3 +98,11 @@ def test_non_object_file_gives_defaults(tmp_path):
     p = tmp_path / "settings.json"
     p.write_text("[1, 2]")
     assert load_settings(p, env={}) == load_settings(tmp_path / "missing.json", env={})
+
+
+def test_runtime_options_watch_poll():
+    assert runtime_options({}).watch_poll_s is None  # native events by default
+    assert runtime_options({"TODOAPP_WATCH_POLL": "2"}).watch_poll_s == 2.0
+    assert runtime_options({"TODOAPP_WATCH_POLL": " 0.5 "}).watch_poll_s == 0.5
+    for bad in ("", "abc", "0", "-1", "0.1", "61", "nan", "inf"):
+        assert runtime_options({"TODOAPP_WATCH_POLL": bad}).watch_poll_s is None, bad

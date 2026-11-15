@@ -113,3 +113,50 @@ def test_dropping_a_file_in_inbox_becomes_a_task(client):
         return any(t["title"] == "From the watcher" for t in client.get("/api/state").json()["tasks"])
 
     assert wait_for(has_task, timeout=8.0)
+
+
+# --- Docker: the watcher must never stop the app starting; polling as an opt-in ---
+
+
+def test_a_watcher_that_cannot_start_is_logged_not_raised(tmp_path, monkeypatch, caplog):
+    import todoapp.watcher as watcher_mod
+
+    class NoInotify(watcher_mod.Observer):
+        def start(self):
+            raise OSError(28, "inotify watch limit reached")
+
+    monkeypatch.setattr(watcher_mod, "Observer", NoInotify)
+    w = DataWatcher(tmp_path, lambda: None, debounce_s=0.1)
+    with caplog.at_level("WARNING", logger="todoapp.watcher"):
+        w.start()  # must not raise
+    assert "TODOAPP_WATCH_POLL" in caplog.text  # tells the reader what to do about it
+    assert not w.running
+    w.stop()  # still safe
+
+
+def test_polling_mode_sees_new_files(tmp_path):
+    from watchdog.observers.polling import PollingObserver
+
+    calls = []
+    w = DataWatcher(tmp_path, lambda: calls.append(1), debounce_s=0.1, poll_s=0.2)
+    w.start()
+    try:
+        assert isinstance(w._observer, PollingObserver)
+        assert w.running
+        (tmp_path / "inbox").mkdir()
+        (tmp_path / "inbox" / "drop.json").write_text("{}")
+        assert wait_for(lambda: len(calls) >= 1)
+    finally:
+        w.stop()
+
+
+def test_context_uses_the_poll_setting(tmp_path):
+    from todoapp.config import AppSettings, RuntimeOptions
+    from todoapp.context import AppContext
+
+    ctx = AppContext(AppSettings(data_dir=tmp_path), RuntimeOptions(watch_poll_s=1.0), tmp_path / "s.json")
+    ctx.start_watcher()
+    try:
+        assert ctx._watcher is not None and ctx._watcher.poll_s == 1.0
+    finally:
+        ctx.stop_watcher()

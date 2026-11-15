@@ -20,7 +20,7 @@ That opens the board in your browser at `http://127.0.0.1:8765/`. To try things 
 .venv/Scripts/python -m todoapp --data-dir .scratch-data --config .scratch-data/settings.json --port 8790
 ```
 
-Other options: `--no-browser` (don't open a browser). `TODOAPP_DATA_DIR` and `TODOAPP_PORT` also override the data folder and port for one run; neither is saved.
+Other options: `--no-browser` (don't open a browser). `TODOAPP_DATA_DIR` and `TODOAPP_PORT` also override the data folder and port for one run; neither is saved. `TODOAPP_WATCH_POLL=2` checks the data folder for outside changes (inbox drops, hand edits) every 2 seconds instead of relying on change notifications, for folders where those don't arrive, such as one mounted into a container.
 
 ## Building the Windows exe
 

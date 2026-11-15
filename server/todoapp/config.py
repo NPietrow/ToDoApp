@@ -41,6 +41,8 @@ class RuntimeOptions(BaseModel):
     bind_host: str = "127.0.0.1"
     public_port: int | None = None
     windows_app: bool = False
+    # TODOAPP_WATCH_POLL: rescan the data folder every N seconds instead of OS change events.
+    watch_poll_s: float | None = None
 
 
 def _port_from(value: str | None) -> int | None:
@@ -103,4 +105,14 @@ def runtime_options(
         bind_host=host,
         public_port=_port_from(env.get("TODOAPP_PUBLIC_PORT")),
         windows_app=frozen,
+        watch_poll_s=_poll_from(env.get("TODOAPP_WATCH_POLL")),
     )
+
+
+def _poll_from(value: str | None) -> float | None:
+    """Seconds between folder rescans, 0.5-60; None (use OS change events) if absent or invalid."""
+    try:
+        seconds = float((value or "").strip())
+    except ValueError:
+        return None
+    return seconds if 0.5 <= seconds <= 60 else None

@@ -9,6 +9,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from .fsutil import is_temp_file
 
@@ -16,10 +17,21 @@ log = logging.getLogger(__name__)
 
 
 class DataWatcher:
-    def __init__(self, data_dir: Path, on_change: Callable[[], None], debounce_s: float = 0.3):
+    """`poll_s` (TODOAPP_WATCH_POLL) rescans the folder every `poll_s` seconds instead of using the
+    operating system's change events: slower, but works where events don't arrive, e.g. a Windows
+    or Mac folder mounted into a Docker container."""
+
+    def __init__(
+        self,
+        data_dir: Path,
+        on_change: Callable[[], None],
+        debounce_s: float = 0.3,
+        poll_s: float | None = None,
+    ):
         self.data_dir = Path(data_dir)
         self.on_change = on_change
         self.debounce_s = debounce_s
+        self.poll_s = poll_s
         self._observer: Observer | None = None
         self._timer: threading.Timer | None = None
         self._lock = threading.Lock()
@@ -31,10 +43,28 @@ class DataWatcher:
                 return
             self._stopped = False
             handler = _Handler(self)
-            observer = Observer(timeout=0.1)  # default 1 s adds a second of latency
-            observer.schedule(handler, str(self.data_dir), recursive=True)
-            observer.start()
+            if self.poll_s is not None:
+                observer = PollingObserver(timeout=self.poll_s)
+            else:
+                observer = Observer(timeout=0.1)  # default 1 s adds a second of latency
+            try:
+                observer.schedule(handler, str(self.data_dir), recursive=True)
+                observer.start()
+            except Exception:
+                # e.g. inotify limits in a container. The app still works: changes made outside it
+                # show on the next reload or restart instead of live.
+                log.warning(
+                    "Couldn't watch %s for outside changes; inbox drops and hand edits will show "
+                    "after a reload or restart. Set TODOAPP_WATCH_POLL=2 to check every 2 seconds instead.",
+                    self.data_dir,
+                    exc_info=True,
+                )
+                return
             self._observer = observer
+
+    @property
+    def running(self) -> bool:
+        return self._observer is not None
 
     def stop(self) -> None:
         """Safe to call repeatedly. Joins the observer thread."""

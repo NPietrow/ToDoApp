@@ -123,7 +123,7 @@ class AppContext:
             self.stop_watcher()
             d = Path(self.settings.data_dir)
             d.mkdir(parents=True, exist_ok=True)
-            self._watcher = DataWatcher(d, self.refresh)
+            self._watcher = DataWatcher(d, self.refresh, poll_s=self.runtime.watch_poll_s)
             self._watcher.start()
 
     def stop_watcher(self) -> None:
