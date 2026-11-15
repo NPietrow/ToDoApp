@@ -88,7 +88,8 @@
   </div>
 {:else}
   <div class="grid-scroll"><div class="board">
-    <div class="grid" role="grid" aria-label="Grid" style:grid-template-columns={columns}>
+    <div class="grid" class:all-collapsed={expanded.length === 0} role="grid" aria-label="Grid"
+      style:grid-template-columns={columns}>
       <div role="row" style="display:contents">
         <div class="corner"></div>
         {#each expanded as project (project.id)}
@@ -197,6 +198,10 @@
     display: grid;
     gap: 6px;
     align-items: stretch;
+  }
+  /* Every column collapsed: don't stretch, so + project sits right after the last strip. */
+  .grid.all-collapsed {
+    flex: 0 0 auto;
   }
   /* Pinned label and corner: an opaque box that also covers the gap beside it (a border in the
      gap colour, pulled into the gap by a negative margin) so scrolled cells don't show through. */

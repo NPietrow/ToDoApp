@@ -88,6 +88,18 @@ describe('collapsing a column', () => {
     expect(app.settings.collapsed_projects).toEqual(['gone', 'p9'])
   })
 
+  test('the grid stops stretching when every column is collapsed, so + project follows it', () => {
+    app.settings.collapsed_projects = ['p1', 'p2']
+    render(Grid)
+    expect(screen.getByRole('grid')).toHaveClass('all-collapsed')
+  })
+
+  test('the grid keeps stretching while any column is expanded', () => {
+    app.settings.collapsed_projects = ['p1']
+    render(Grid)
+    expect(screen.getByRole('grid')).not.toHaveClass('all-collapsed')
+  })
+
   test('a failed save reverts to the previous value and shows a toast', async () => {
     app.settings.collapsed_projects = ['p2']
     vi.spyOn(api, 'patchSettings').mockRejectedValue(new ApiError(500, 'disk full'))
