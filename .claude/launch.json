@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "scratch",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "todoapp", "--data-dir", ".scratch-data", "--config", ".scratch-data/settings.json", "--port", "8796", "--no-browser"],
+      "port": 8796
+    }
+  ]
+}
