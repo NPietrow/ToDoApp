@@ -27,5 +27,4 @@ packaging/icon.ico
 
 # Local context only, not published
 CLAUDE.md
-idea-brain-dump.md
-docs/superpowers/
+private/
