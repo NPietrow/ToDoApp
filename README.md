@@ -11,7 +11,7 @@ I built this to replace a very useful OneNote notebook table that worked better 
 
 ## Why you might like it
 
-- **Fast capture.** Every cell has a "+ add" line. Type, press Enter, keep typing. Dates, descriptions and status are optional extras you can add later, or never. For me this was the critical goal, to minimimise the time spent maintaining the task board. 
+- **Fast capture.** Every cell has a "+ add" line. Type, press Enter, keep typing. Dates, descriptions and status are optional extras you can add later, or never. For me this was the critical goal, to minimise the time spent maintaining the task board. 
 - **Everything at a glance.** All projects, all task types, one page. No cell ever scrolls inside itself, so nothing hides; when the board gets long, the page scrolls, which is your nudge to tidy up.
 - **Your data stays yours.** Every task is a small JSON file in a folder you choose. The app runs on your own machine, listens only on `127.0.0.1`, and makes **no outbound network calls at all**: no accounts, no cloud, no analytics, no update checks, not even web fonts.
 - **Plays well with AI.** Paste an AI assistant's meeting summary task list (Copilot, ChatGPT, Claude and so on) into the **Paste tasks** box, or have a tool drop a file into the `inbox/` folder, and the tasks appear on the board. Handy for turning meeting notes into actions (you will just need to prompt the models to output the correct format)
