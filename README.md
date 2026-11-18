@@ -57,7 +57,7 @@ Neither Python nor Node needs admin rights if you install them "for me only".
 Open PowerShell in the folder where you want ToDoApp to live, then:
 
 ```powershell
-git clone <this repository's URL> ToDoApp
+git clone https://github.com/NPietrow/ToDoApp.git ToDoApp
 cd ToDoApp
 py -3.13 -m venv .venv
 powershell -ExecutionPolicy Bypass -File scripts/build-exe.ps1
