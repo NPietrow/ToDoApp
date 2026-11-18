@@ -6,15 +6,7 @@ If your week looks like three client projects, a bid, some team admin and a hand
 
 It was built to replace a OneNote table that worked better than every "proper" task tool tried before it. It suits consultants, engineers, researchers and anyone else whose work is organised by project.
 
-```
-              │ Client A pilot      │ Data platform      │ Bid: Line 4        │ Team admin
-──────────────┼─────────────────────┼────────────────────┼────────────────────┼──────────────────
- Urgent       │ ☐ Interim report    │ ☐ Fix ingest gap   │ ☐ Send bid pack    │
- Quick        │ ☐ Chase Sam re NDA  │ ☐ Reply to vendor  │ ☐ Book site visit  │ ☐ Approve leave
- General      │ ☐ Review dashboards │ ☐ Update Gantt     │                    │ ☐ 1:1 notes
- Objectives   │                     │ ☐ Retention policy │                    │ ☐ Hiring plan
- Notes        │ free text for meeting notes, one box per project …
-```
+![The ToDoApp board: four projects as coloured columns, with rows for Urgent, Quick, General and Objectives tasks and a Notes box for each project](docs/images/board.png)
 
 ## Why you might like it
 
@@ -104,8 +96,14 @@ Your browser opens at <http://127.0.0.1:8765/>. Stop it with **Ctrl+C** in the t
 
 1. **Create your first project.** On the empty board, click **Create your first project** and give it a name. Add more with **+ project** after the last column; right-click a project's name for more options.
 2. **Capture tasks.** Click **+ add** in any cell, type, press **Enter**. The box stays open for the next one. **Escape** closes it.
+
+   <img src="docs/images/quick-capture.png" alt="A new task being typed straight into the Quick row of a project" width="640">
+
 3. **Tick tasks off** with the checkbox.
 4. **Add detail when you have time.** Click a task to open it: description, due date, status, task type, project.
+
+   <img src="docs/images/task-details.png" alt="A task opened to show its project, task type, status, due date and description" width="560">
+
 5. **Keep notes** in each project's Notes box. It saves as you type.
 
 ### Getting tasks in from an AI assistant
@@ -113,6 +111,8 @@ Your browser opens at <http://127.0.0.1:8765/>. Stop it with **Ctrl+C** in the t
 1. In ToDoApp, click **Paste tasks**, then **Copy AI prompt**. That copies a ready-made prompt that already lists your project names.
 2. Paste the prompt into your AI assistant, followed by your meeting notes or transcript.
 3. Copy the assistant's whole reply, paste it into the **Paste tasks** box, check the preview and click **Import**.
+
+<img src="docs/images/paste-tasks.png" alt="An AI assistant's reply pasted into the Paste tasks box, with a preview showing where each of the four tasks will go" width="560">
 
 The assistant's reply can include chat and code fences; ToDoApp finds the tasks inside it. If a tool can write files instead, have it save a `.json` file into the `inbox/` folder of your data folder. The format and a sample prompt are in [docs/ai-intake/README.md](docs/ai-intake/README.md), and the formal schema in [docs/ai-intake/intake.schema.json](docs/ai-intake/intake.schema.json).
 
