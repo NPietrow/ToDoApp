@@ -122,6 +122,8 @@ class _Handler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent) -> None:
         if event.event_type == "opened" or event.event_type == "closed_no_write":
             return
+        if event.is_directory and event.event_type == "modified":
+            return  # only says something inside changed; real changes arrive as their own file events
         paths = [event.src_path, getattr(event, "dest_path", "")]
         if any(p and self._w._relevant(str(p)) for p in paths):
             self._w._poke()

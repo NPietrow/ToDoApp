@@ -2,7 +2,9 @@ import json
 import time
 from pathlib import Path
 
-from todoapp.watcher import DataWatcher
+from watchdog.events import DirDeletedEvent, DirModifiedEvent, FileModifiedEvent
+
+from todoapp.watcher import DataWatcher, _Handler
 
 
 def wait_for(predicate, timeout=5.0):
@@ -39,8 +41,27 @@ def test_temp_files_alone_do_not_fire(tmp_path):
         (tmp_path / "tasks" / "~$lock.json").write_text("{}")
         time.sleep(0.6)
         assert calls == []
+        (tmp_path / "tasks" / "real.json").write_text("{}")  # the watcher was listening all along
+        assert wait_for(lambda: len(calls) >= 1)
     finally:
         w.stop()
+
+
+def test_a_folder_reported_as_modified_is_not_a_change(tmp_path):
+    # Windows can report the parent folder as modified when a temp file appears in it. Real changes
+    # always arrive as their own file event, so the folder event alone must not trigger a refresh.
+    pokes = []
+    w = DataWatcher(tmp_path, lambda: None)
+    w._poke = lambda: pokes.append(1)
+    handler = _Handler(w)
+
+    handler.on_any_event(DirModifiedEvent(str(tmp_path / "tasks")))
+    assert pokes == []
+
+    handler.on_any_event(FileModifiedEvent(str(tmp_path / "tasks" / "a.json")))
+    assert len(pokes) == 1
+    handler.on_any_event(DirDeletedEvent(str(tmp_path / "tasks")))  # other folder events still count
+    assert len(pokes) == 2
 
 
 def test_processed_and_trash_are_ignored(tmp_path):
