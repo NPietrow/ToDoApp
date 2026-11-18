@@ -20,7 +20,7 @@ try {
     Invoke-Step 'Install web dependencies' { npm --prefix web ci }
     Invoke-Step 'Build the UI' { npm --prefix web run build }
     Invoke-Step 'Install the [windows] extra and PyInstaller' {
-        & $python -m pip install -e "server[windows]" pyinstaller
+        & $python -m pip install -c server/requirements.txt -e "server[windows]" pyinstaller
     }
     Invoke-Step 'Generate packaging\icon.ico' {
         & $python -c "import sys; from todoapp.launcher.tray import make_icon_image; make_icon_image(256).save(sys.argv[1], format='ICO', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])" $icon

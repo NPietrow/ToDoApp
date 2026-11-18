@@ -73,7 +73,7 @@ From the repository folder:
 
 ```powershell
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install -e server
+.venv\Scripts\python -m pip install -c server/requirements.txt -e server
 npm --prefix web ci
 npm --prefix web run build
 .venv\Scripts\python -m todoapp
@@ -83,7 +83,7 @@ npm --prefix web run build
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -e server
+.venv/bin/python -m pip install -c server/requirements.txt -e server
 npm --prefix web ci
 npm --prefix web run build
 .venv/bin/python -m todoapp
@@ -187,7 +187,7 @@ Set up with the dev extras (add `,windows` on Windows for the tray and launcher)
 
 ```powershell
 py -3.13 -m venv .venv
-.venv\Scripts\python -m pip install -e "server[dev,windows]"
+.venv\Scripts\python -m pip install -c server/requirements.txt -e "server[dev,windows]"
 npm --prefix web ci
 ```
 
