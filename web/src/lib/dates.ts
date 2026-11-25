@@ -54,6 +54,12 @@ export function formatDue(due: string, today: string): string {
   return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
 
+/** Whether a due date is before, on or after `today` (calendar days; 'YYYY-MM-DD' strings order correctly). */
+export function dueState(due: string, today: string): 'overdue' | 'today' | 'future' {
+  if (due < today) return 'overdue'
+  return due === today ? 'today' : 'future'
+}
+
 /** "4 Nov": the local calendar day of a UTC ISO datetime. */
 export function formatShortDate(iso: string): string {
   const d = new Date(iso)

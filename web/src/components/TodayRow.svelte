@@ -3,7 +3,7 @@
   // Alt+Up/Down on the focused row moves it; so does dragging it.
   // A click anywhere else on the row opens the pop-up; right-click, Shift+F10 and the ContextMenu
   // key open the task menu; Enter opens the task. × only unpins. Done rows have no grip or ×.
-  import { formatDue } from '../lib/dates'
+  import DueChip from './DueChip.svelte'
   import { TODAY_DRAG } from '../lib/dnd'
   import { colourOf } from '../lib/palette'
   import { app } from '../lib/state.svelte'
@@ -80,7 +80,7 @@
     aria-label={task.title} draggable="false" onclick={tick.toggle}
   ></button>
   <span class="title">{task.title}</span>
-  {#if task.due_date}<span class="chip due">{formatDue(task.due_date, app.today)}</span>{/if}
+  {#if task.due_date}<DueChip due={task.due_date} done={task.status === 'done'} />{/if}
   <span class="type">{typeLabel}</span>
   <span class="chip proj" style:background={colours?.header}>{project ? project.name : 'Unsorted'}</span>
   {#if task.status === 'done'}
@@ -157,10 +157,6 @@
     border-radius: 8px;
     font-size: 0.84em;
     white-space: nowrap;
-  }
-  .due {
-    color: var(--due-fg);
-    background: var(--due-bg);
   }
   .proj {
     padding: 1px 8px;

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest'
 import type { Task } from '../src/lib/types'
 import {
   addDays,
+  dueState,
   formatDue,
   formatShortDate,
   formatStamp,
@@ -77,4 +78,12 @@ test('formatShortDate and formatStamp use the local day and time', () => {
   const iso = new Date(2026, 10, 4, 9, 5).toISOString()
   expect(formatShortDate(iso)).toBe('4 Nov')
   expect(formatStamp(iso)).toBe('4 Nov 09:05')
+})
+
+test('dueState compares calendar days', () => {
+  expect(dueState('2026-11-12', '2026-11-13')).toBe('overdue')
+  expect(dueState('2026-11-13', '2026-11-13')).toBe('today')
+  expect(dueState('2026-11-14', '2026-11-13')).toBe('future')
+  expect(dueState('2026-11-30', '2026-12-01')).toBe('overdue')
+  expect(dueState('2026-12-01', '2026-11-30')).toBe('future')
 })

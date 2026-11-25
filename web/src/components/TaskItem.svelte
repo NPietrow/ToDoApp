@@ -4,7 +4,8 @@
   // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
   // --accent custom property. In picking mode a click (or Enter) anywhere but the tick box pins or
   // unpins the card instead, and dragging, the menu and Delete are off.
-  import { formatDue, isToday } from '../lib/dates'
+  import { isToday } from '../lib/dates'
+  import DueChip from './DueChip.svelte'
   import { deleteWithUndo } from '../lib/menus'
   import { app } from '../lib/state.svelte'
   import { tickBox } from '../lib/tick.svelte'
@@ -85,7 +86,7 @@
   ></button>
   <span class="body">
     <span class="title">{task.title}</span>
-    {#if task.due_date}<span class="chip due">{formatDue(task.due_date, app.today)}</span>{/if}
+    {#if task.due_date}<DueChip due={task.due_date} done={task.status === 'done'} />{/if}
     {#if task.status === 'blocked'}<span class="chip blk">Blocked</span>{/if}
     {#if task.description}<span class="desc" role="img" aria-label="has description">≡</span>{/if}
   </span>
@@ -196,9 +197,8 @@
     font-size: 0.84em;
     white-space: nowrap;
   }
-  .due {
-    color: var(--due-fg);
-    background: var(--due-bg);
+  .body :global(.due) {
+    margin-left: 4px;
   }
   .blk {
     color: var(--blocked-fg);

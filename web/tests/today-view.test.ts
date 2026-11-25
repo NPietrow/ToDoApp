@@ -85,6 +85,15 @@ describe('Today view', () => {
     expect(screen.getAllByRole('columnheader').length).toBeGreaterThan(0)
   })
 
+  test('today row due chip shows its state', async () => {
+    await renderToday([
+      makeTask({ id: 'a1', title: 'Late row', planned_for: TODAY, today_order: 0, due_date: '2026-11-12' }),
+      makeTask({ id: 'a2', title: 'Soon row', planned_for: TODAY, today_order: 1, due_date: '2026-11-20' }),
+    ])
+    expect(rowOf('Late row').querySelector('.due')).toHaveAttribute('data-due', 'overdue')
+    expect(rowOf('Soon row').querySelector('.due')).toHaveAttribute('data-due', 'future')
+  })
+
   test('rows show title, due chip, task type and project chip', async () => {
     await renderToday([
       makeTask({

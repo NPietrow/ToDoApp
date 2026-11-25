@@ -5,6 +5,8 @@
   --blocked-bg: #fdecea;
   --due-fg: #b0603a;
   --due-bg: #fdf1ea;
+  --due-future-fg: #a0a0a0;
+  --due-overdue-border: #c9763f;
   --base-size: 12.5px;
   --text-small: 11.5px;
   --text-medium: 12.5px;

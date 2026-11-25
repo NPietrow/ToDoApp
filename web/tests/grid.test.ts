@@ -210,6 +210,38 @@ describe('Grid', () => {
   })
 })
 
+describe('Grid due chip state', () => {
+  const chipOf = (title: string) =>
+    screen.getByText(title).closest('[data-task-id]')!.querySelector<HTMLElement>('.due')!
+
+  test('overdue due chip is marked overdue', () => {
+    app.tasks.push(makeTask({ id: 'o1', title: 'Late one', due_date: '2026-11-12' }))
+    render(Grid)
+    expect(chipOf('Late one')).toHaveAttribute('data-due', 'overdue')
+    expect(chipOf('Late one')).toHaveTextContent('Thu 12 Nov')
+  })
+
+  test('future due chip is quiet', () => {
+    app.tasks.push(makeTask({ id: 'f1', title: 'Later one', due_date: '2026-11-20' }))
+    render(Grid)
+    expect(chipOf('Later one')).toHaveAttribute('data-due', 'future')
+  })
+
+  test('due today chip is marked today', () => {
+    app.tasks.push(makeTask({ id: 'n1', title: 'Now one', due_date: TODAY }))
+    render(Grid)
+    expect(chipOf('Now one')).toHaveAttribute('data-due', 'today')
+  })
+
+  test("done task's chip is never overdue", () => {
+    app.tasks.push(
+      makeTask({ id: 'd1', title: 'Finished late', due_date: '2026-11-01', status: 'done', completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+    )
+    render(Grid)
+    expect(chipOf('Finished late')).toHaveAttribute('data-due', 'future')
+  })
+})
+
 describe('Grid pin button', () => {
   function card(title: string) {
     return screen.getByText(title).closest('[data-task-id]') as HTMLElement
