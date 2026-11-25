@@ -61,6 +61,11 @@ class ScanResult:
 _Sig = tuple[int, int]  # (st_mtime_ns, st_size)
 
 
+def _today_key(t: Task) -> tuple:
+    """The Today list's order, as the UI sorts it: today_order (unset last), created_at, id."""
+    return (t.today_order is None, t.today_order or 0, t.created_at, t.id)
+
+
 class TaskRepository:
     def __init__(self, data_dir: Path):
         self._dir = Path(data_dir)
@@ -130,7 +135,35 @@ class TaskRepository:
         cell = self._cell(project_id, task_type, exclude)
         return cell[-1].order + 1 if cell else 0
 
+    def _today_list(self, day: date, exclude: str | None = None) -> list[Task]:
+        """Open tasks pinned to `day`, in the order the UI shows them."""
+        return sorted(
+            (
+                t
+                for t in self._tasks.values()
+                if t.planned_for == day and t.status != Status.DONE and t.id != exclude
+            ),
+            key=_today_key,
+        )
+
+    def _number_today(self, tasks: list[Task]) -> list[Task]:
+        """Give `tasks` today_order 0..n-1 in list order, writing only those that change."""
+        out = []
+        for i, t in enumerate(tasks):
+            if t.today_order != i:
+                t = t.model_copy(update={"today_order": i})
+                self._write(t)
+            out.append(t)
+        return out
+
     def _next_today_order(self, day: date, exclude: str | None = None) -> int:
+        """The today_order for a new pin on `day`: the bottom of the list.
+
+        Pins with no today_order (from before ordering existed, or hand-edited files) sort
+        last, so a new pin would land above them: number the day's list first."""
+        listed = self._today_list(day, exclude)
+        if any(t.today_order is None for t in listed):
+            return len(self._number_today(listed))
         orders = [
             t.today_order
             for t in self._tasks.values()
@@ -360,21 +393,8 @@ class TaskRepository:
             if t.status == Status.DONE or t.planned_for != day:
                 raise ValueError(f"task {id} isn't on the list for {day}")
         listed = set(ids)
-        rest = sorted(
-            (
-                t
-                for t in self._tasks.values()
-                if t.planned_for == day and t.status != Status.DONE and t.id not in listed
-            ),
-            key=lambda t: (t.today_order is None, t.today_order or 0),
-        )
-        out = []
-        for i, t in enumerate([self._tasks[id] for id in ids] + rest):
-            if t.today_order != i:
-                t = t.model_copy(update={"today_order": i})
-                self._write(t)
-            out.append(t)
-        return out
+        rest = [t for t in self._today_list(day) if t.id not in listed]
+        return self._number_today([self._tasks[id] for id in ids] + rest)
 
     def _renumber(self, cell: list[Task], force: set[str]) -> list[Task]:
         out = []
