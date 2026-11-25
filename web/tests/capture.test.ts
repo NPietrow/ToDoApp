@@ -82,6 +82,24 @@ describe('AddLine', () => {
     expect(screen.getByRole('textbox')).toHaveValue('Second')
   })
 
+  test('rapid Enter creates in typed order', async () => {
+    const resolvers: Array<() => void> = []
+    const create = vi.spyOn(api, 'createTask').mockImplementation(
+      () => new Promise((resolve) => resolvers.push(() => resolve(TASK))),
+    )
+    await openAdd()
+    await user.keyboard('one{Enter}two{Enter}')
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenNthCalledWith(1, 'one', 'p1', 'quick')
+    // The second create must not start until the first has finished.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(create).toHaveBeenCalledTimes(1)
+    resolvers[0]()
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2))
+    expect(create).toHaveBeenNthCalledWith(2, 'two', 'p1', 'quick')
+    resolvers[1]()
+  })
+
   test('blur with text keeps the input open and the text', async () => {
     await openAdd()
     await user.keyboard('keep me')
