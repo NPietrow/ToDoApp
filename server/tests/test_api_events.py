@@ -92,3 +92,28 @@ async def test_events_refuses_foreign_host(app_and_ctx):
     }
     await app(scope, receive, send)
     assert sent[0]["status"] in (400, 403)
+
+
+async def test_stream_ends_when_bus_closes(app_and_ctx):
+    app, ctx = app_and_ctx
+    s = Stream(app)
+    try:
+        await s.next()  # response start
+        await asyncio.sleep(0.05)  # let the handler subscribe
+        ctx.bus.close()
+        await asyncio.wait_for(s.task, 3)  # the app returns by itself, no exception
+        assert s.task.exception() is None
+    finally:
+        await s.close()
+    assert ctx.bus._subs == []
+
+
+async def test_stream_after_close_ends_at_once(app_and_ctx):
+    app, ctx = app_and_ctx
+    ctx.bus.close()
+    s = Stream(app)
+    try:
+        await asyncio.wait_for(s.task, 3)
+        assert s.task.exception() is None
+    finally:
+        await s.close()

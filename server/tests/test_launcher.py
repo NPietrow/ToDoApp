@@ -48,7 +48,7 @@ def running_server(tmp_path):
     while not server.started and time.monotonic() < deadline:
         time.sleep(0.05)
     assert server.started
-    yield SimpleNamespace(port=port, server=server)
+    yield SimpleNamespace(port=port, server=server, thread=thread)
     server.should_exit = True
     thread.join(timeout=10)
 
@@ -76,6 +76,33 @@ def other_server():
     httpd.shutdown()
     httpd.server_close()
     thread.join(timeout=5)
+
+
+def test_quit_is_fast_with_open_event_stream(running_server):
+    import httpx
+
+    opened = threading.Event()
+
+    def hold_stream():
+        try:
+            with httpx.stream("GET", f"http://127.0.0.1:{running_server.port}/api/events", timeout=10) as r:
+                opened.set()
+                for _ in r.iter_raw():
+                    pass
+        except httpx.HTTPError:
+            opened.set()
+
+    client = threading.Thread(target=hold_stream, daemon=True)
+    client.start()
+    assert opened.wait(5)
+    time.sleep(0.2)  # let the server register the stream
+
+    started = time.monotonic()
+    running_server.server.should_exit = True
+    running_server.thread.join(timeout=5)
+    assert not running_server.thread.is_alive()
+    assert time.monotonic() - started < 1.0
+    client.join(timeout=5)
 
 
 # --- browser ------------------------------------------------------------------

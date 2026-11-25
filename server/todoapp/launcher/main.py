@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 import sys
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +33,26 @@ def is_windows_app() -> bool:
     return bool(getattr(sys, "frozen", False)) and sys.platform == "win32"
 
 
+class AppServer(uvicorn.Server):
+    """Runs on_shutdown first thing in uvicorn's shutdown, before it waits for open connections.
+    (FastAPI's lifespan shutdown runs only after they drain, which is too late for SSE streams.)"""
+
+    def __init__(self, config: uvicorn.Config, on_shutdown: Callable[[], None]) -> None:
+        super().__init__(config)
+        self._on_shutdown = on_shutdown
+
+    async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+        self._on_shutdown()
+        await super().shutdown(sockets)
+
+
 def make_server(app: Any, host: str, port: int, **config: Any) -> uvicorn.Server:
-    # A short graceful timeout, so open /api/events streams don't hold up Quit or Ctrl+C.
-    return uvicorn.Server(uvicorn.Config(app, host=host, port=port, timeout_graceful_shutdown=2, **config))
+    # Closing the bus ends the /api/events streams so Quit and Ctrl+C are instant; the short
+    # graceful timeout is only a backstop.
+    return AppServer(
+        uvicorn.Config(app, host=host, port=port, timeout_graceful_shutdown=2, **config),
+        on_shutdown=app.state.ctx.bus.close,
+    )
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
