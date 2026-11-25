@@ -94,6 +94,37 @@ describe('Today view', () => {
     expect(rowOf('Soon row').querySelector('.due')).toHaveAttribute('data-due', 'future')
   })
 
+  describe('row columns', () => {
+    const COLS = ['c-grip', 'c-tick', 'c-title', 'c-due', 'c-type', 'c-project', 'c-x']
+    const cells = (row: HTMLElement) => Array.from(row.children).map((c) => c.className.split(' ')[0])
+
+    test('every row renders the same columns', async () => {
+      await renderToday([
+        makeTask({ id: 'c1', title: 'Dated', planned_for: TODAY, today_order: 0, due_date: '2026-11-20' }),
+        makeTask({ id: 'c2', title: 'Undated', planned_for: TODAY, today_order: 1 }),
+        makeTask({ id: 'c3', title: 'Finished', planned_for: TODAY, today_order: 2, status: 'done',
+          completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+      ])
+      for (const t of ['Dated', 'Undated', 'Finished']) expect(cells(rowOf(t))).toEqual(COLS)
+    })
+
+    test('a row without a due date keeps an empty due cell', async () => {
+      await renderToday([makeTask({ id: 'c2', title: 'Undated', planned_for: TODAY, today_order: 0 })])
+      const due = rowOf('Undated').querySelector('.c-due')!
+      expect(due).toBeEmptyDOMElement()
+    })
+
+    test('done row keeps empty grip and x cells', async () => {
+      await renderToday([
+        makeTask({ id: 'c3', title: 'Finished', planned_for: TODAY, today_order: 0, status: 'done',
+          completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+      ])
+      const row = rowOf('Finished')
+      expect(row.querySelector('.c-grip')).toBeEmptyDOMElement()
+      expect(row.querySelector('.c-x')).toBeEmptyDOMElement()
+    })
+  })
+
   test('rows show title, due chip, task type and project chip', async () => {
     await renderToday([
       makeTask({

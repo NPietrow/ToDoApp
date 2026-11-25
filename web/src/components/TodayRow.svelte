@@ -71,32 +71,31 @@
     openMenu(e.clientX, e.clientY)
   }}
 >
-  {#if task.status === 'done'}
-    <span class="gap" aria-hidden="true"></span>
-  {:else}
-    <span class="grip" aria-hidden="true">⋮⋮</span>
-  {/if}
-  <button type="button" class="bx" class:on={done} role="checkbox" aria-checked={done}
-    aria-label={task.title} draggable="false" onclick={tick.toggle}
-  ></button>
-  <span class="title">{task.title}</span>
-  {#if task.due_date}<DueChip due={task.due_date} done={task.status === 'done'} />{/if}
-  <span class="type">{typeLabel}</span>
-  <span class="chip proj" style:background={colours?.header}>{project ? project.name : 'Unsorted'}</span>
-  {#if task.status === 'done'}
-    <span class="gap" aria-hidden="true"></span>
-  {:else}
-    <button type="button" class="x" aria-label="Remove from today" title="Remove from today"
-      onclick={() => void setPinned(task, false, app.today)}>×</button
-    >
-  {/if}
+  <span class="c-grip">{#if task.status !== 'done'}<span class="grip" aria-hidden="true">⋮⋮</span>{/if}</span>
+  <span class="c-tick">
+    <button type="button" class="bx" class:on={done} role="checkbox" aria-checked={done}
+      aria-label={task.title} draggable="false" onclick={tick.toggle}
+    ></button>
+  </span>
+  <span class="c-title title">{task.title}</span>
+  <span class="c-due">{#if task.due_date}<DueChip due={task.due_date} done={task.status === 'done'} />{/if}</span>
+  <span class="c-type type">{typeLabel}</span>
+  <span class="c-project"><span class="chip proj" style:background={colours?.header}>{project ? project.name : 'Unsorted'}</span></span>
+  <span class="c-x">
+    {#if task.status !== 'done'}
+      <button type="button" class="x" aria-label="Remove from today" title="Remove from today"
+        onclick={() => void setPinned(task, false, app.today)}>×</button
+      >
+    {/if}
+  </span>
 </div>
 
 <style>
   .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 12px 15px minmax(0, 1fr) 78px 82px 128px 12px;
     align-items: center;
-    gap: 10px;
+    column-gap: 10px;
     padding: 8px 10px;
     background: #fff;
     border-radius: 8px;
@@ -113,19 +112,25 @@
     outline: 2px solid var(--accent, #9a9a9a);
     outline-offset: 1px;
   }
-  .grip,
-  .gap {
-    flex-shrink: 0;
-    width: 10px;
+  .c-due,
+  .c-type,
+  .c-project {
+    justify-self: end;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .c-x {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .grip {
+    display: block;
     color: #ccc;
     letter-spacing: -2px;
     cursor: grab;
   }
-  .gap {
-    cursor: inherit;
-  }
   .bx {
-    flex-shrink: 0;
+    display: block;
     box-sizing: border-box;
     width: 15px;
     height: 15px;
@@ -139,7 +144,6 @@
     background: var(--accent, #9a9a9a);
   }
   .title {
-    flex: 1 1 auto;
     min-width: 0;
     overflow-wrap: anywhere;
   }
@@ -159,24 +163,25 @@
     white-space: nowrap;
   }
   .proj {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     padding: 1px 8px;
     background: #ecebe7;
     color: #444;
   }
   .type {
-    flex-shrink: 0;
-    width: 74px;
     color: #a3a3a3;
     font-size: 0.84em;
     font-weight: 700;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    white-space: nowrap;
   }
   /* × only on hover or while the row (or something in it) has focus. Its space is kept, and it
      stays in the tab order (opacity, not visibility), so Tab from the row reaches it. */
   .x {
-    flex-shrink: 0;
-    width: 18px;
     padding: 0;
     border: 0;
     background: none;
@@ -193,8 +198,5 @@
   }
   .x:hover {
     color: var(--text);
-  }
-  .done .gap:last-child {
-    width: 18px;
   }
 </style>
