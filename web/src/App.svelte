@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import Grid from './components/Grid.svelte'
   import PasteTasksModal from './components/PasteTasksModal.svelte'
+  import PickingBanner from './components/PickingBanner.svelte'
   import ProblemsList from './components/ProblemsList.svelte'
   import SettingsModal from './components/SettingsModal.svelte'
   import Toast from './components/Toast.svelte'
@@ -40,6 +41,7 @@
   <div class="board" inert={app.serverStopped}>
     <div class="app">
       <TopBar />
+      {#if ui.picking}<PickingBanner />{/if}
       {#if ui.view === 'today'}<TodayView />{:else}<Grid />{/if}
     </div>
     {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}

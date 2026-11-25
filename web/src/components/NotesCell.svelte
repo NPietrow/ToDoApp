@@ -2,13 +2,15 @@
   // One project's notes: a plain textarea that grows with its text and never scrolls inside
   // itself. Saves 400 ms after the last keystroke and on blur. A refresh doesn't overwrite what
   // is being typed (focus, or a save still waiting or in flight). Read-only while the server
-  // reports its file as unreadable, so the file is never overwritten (see File problems).
+  // reports its file as unreadable, so the file is never overwritten (see File problems), and
+  // while picking for today. A save still waiting goes ahead either way.
   import { onDestroy, untrack } from 'svelte'
   import { putNotes } from '../lib/api'
   import { plainPaste } from '../lib/paste'
   import { app, refresh } from '../lib/state.svelte'
   import { continueBullet } from '../lib/text'
   import { showToast } from '../lib/toast.svelte'
+  import { ui } from '../lib/ui.svelte'
 
   const DEBOUNCE_MS = 400
 
@@ -60,7 +62,7 @@
   onDestroy(() => void flush())
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || unreadable) return
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || unreadable || ui.picking) return
     const box = e.currentTarget as HTMLTextAreaElement
     if (box.selectionStart !== box.selectionEnd) return
     const next = continueBullet(box.value, box.selectionStart)
@@ -111,7 +113,7 @@
 <textarea aria-label="Notes" rows="1" bind:this={el} bind:value={draft} oninput={onInput}
   onkeydown={onKeydown} onblur={() => void flush()} use:grow={{ text: draft, size: app.settings.text_size }}
   use:plainPaste={{ multiline: true }} style:overflow-y="hidden"
-  readonly={unreadable} placeholder={unreadable ? "Can't read this notes file: see file problems" : undefined}
+  readonly={unreadable || ui.picking} placeholder={unreadable ? "Can't read this notes file: see file problems" : undefined}
 ></textarea>
 
 <style>

@@ -4,7 +4,7 @@
   import { onMount } from 'svelte'
   import { patchSettings } from '../lib/api'
   import { collapseAll, expandAll } from '../lib/collapse'
-  import { startPicking } from '../lib/picking'
+  import { endPicking, startPicking } from '../lib/picking'
   import { app, unsortedTasks } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
   import { ui, type Modal, type View } from '../lib/ui.svelte'
@@ -43,6 +43,11 @@
   })
 
   function show(view: View) {
+    // A view tab also leaves picking mode, and counts as leaving it for the planning log.
+    if (ui.picking) {
+      void endPicking(view)
+      return
+    }
     // A menu opened on one view has nothing to point at on the other.
     ui.contextMenu = null
     ui.view = view
@@ -74,7 +79,7 @@
   </nav>
 
   <div class="actions">
-    <button type="button" class="btn" onclick={startPicking}>Plan today</button>
+    {#if !ui.picking}<button type="button" class="btn" onclick={startPicking}>Plan today</button>{/if}
     <button type="button" class="btn" data-modal-button="paste" onclick={() => open('paste')}>Paste tasks</button>
     {#if unsortedCount > 0}
       <button type="button" class="btn" data-modal-button="unsorted" onclick={() => open('unsorted')}

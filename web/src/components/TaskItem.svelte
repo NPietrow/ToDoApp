@@ -2,7 +2,8 @@
   // One task card in a Grid cell. The tick box ticks; a click anywhere else on the card opens
   // the pop-up (a link inside it is followed instead). Right-click, Shift+F10 and the ContextMenu key open its menu
   // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
-  // --accent custom property.
+  // --accent custom property. In picking mode a click (or Enter) anywhere but the tick box pins or
+  // unpins the card instead, and dragging, the menu and Delete are off.
   import { formatDue, isToday } from '../lib/dates'
   import { deleteWithUndo } from '../lib/menus'
   import { app } from '../lib/state.svelte'
@@ -21,9 +22,14 @@
   // A drag that ends over its own card must not also count as a click.
   let dragged = false
 
+  function togglePin() {
+    void setPinned(task, !pinned, app.today)
+  }
+
   function onclick(e: MouseEvent) {
     if (dragged || (e.target as HTMLElement).closest('a, .bx, .pin-btn')) return
-    ui.openTaskId = task.id
+    if (ui.picking) togglePin()
+    else ui.openTaskId = task.id
   }
 
   function dragStart(e: DragEvent) {
@@ -44,6 +50,13 @@
   function onkeydown(e: KeyboardEvent) {
     // Only keys pressed on the card itself, never on the tick box.
     if (e.target !== e.currentTarget) return
+    if (ui.picking) {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        togglePin()
+      }
+      return
+    }
     if (e.key === 'Enter') {
       e.preventDefault()
       ui.openTaskId = task.id
@@ -59,12 +72,12 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
-<div class="t" class:pin={pinned} class:done data-task-id={task.id}
-  draggable="true" ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
+<div class="t" class:pin={pinned} class:done class:picking={ui.picking} class:picked={ui.picking && pinned}
+  data-task-id={task.id} draggable={!ui.picking} ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
   {onclick} role="group" tabindex="0" {onkeydown}
   oncontextmenu={(e) => {
     e.preventDefault()
-    openMenu(e.clientX, e.clientY)
+    if (!ui.picking) openMenu(e.clientX, e.clientY)
   }}
 >
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
@@ -80,7 +93,7 @@
     aria-label={pinned ? 'Remove from today' : 'Add to today'}
     onclick={(e) => {
       e.stopPropagation()
-      void setPinned(task, !pinned, app.today)
+      togglePin()
     }}
   ><PinIcon filled={pinned} /></button>
 </div>
@@ -156,6 +169,22 @@
   }
   .pin-btn:hover {
     color: #333;
+  }
+  /* Picking mode: every card shows its pin, faint until picked; picked cards get a dark ring
+     (also on hover, which would otherwise swap in the accent ring). */
+  .picking .pin-btn {
+    visibility: visible;
+    color: #c4c4c4;
+  }
+  .picking .pin-btn.on,
+  .picking .pin-btn:hover {
+    color: var(--text);
+  }
+  .t.picked,
+  .t.picked:hover {
+    box-shadow:
+      0 0 0 1.5px var(--text),
+      0 1px 2px rgba(0, 0, 0, 0.06);
   }
   .done .bx {
     background: var(--accent, #9a9a9a);

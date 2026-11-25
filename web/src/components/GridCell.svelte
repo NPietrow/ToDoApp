@@ -1,5 +1,6 @@
 <script lang="ts">
-  // One project × task type cell: the visible tasks, in `order`. Ends with the "+ add" line.
+  // One project × task type cell: the visible tasks, in `order`. Ends with the "+ add" line,
+  // except in picking mode, where a click means only pick.
   import { moveTask } from '../lib/api'
   import { isVisibleOnGrid } from '../lib/dates'
   import { dropIndex } from '../lib/dnd'
@@ -7,6 +8,7 @@
   import { app, refresh } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
   import type { TaskType } from '../lib/types'
+  import { ui } from '../lib/ui.svelte'
   import AddLine from './AddLine.svelte'
   import TaskItem from './TaskItem.svelte'
 
@@ -84,7 +86,7 @@
   {#each tasks as task (task.id)}
     <TaskItem {task} />
   {/each}
-  <AddLine {projectId} {taskType} />
+  {#if !ui.picking}<AddLine {projectId} {taskType} />{/if}
 </div>
 
 <style>
