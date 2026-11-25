@@ -6,7 +6,7 @@ import os
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -129,6 +129,14 @@ class TaskRepository:
     def _next_order(self, project_id: str | None, task_type: TaskType, exclude: str | None = None) -> int:
         cell = self._cell(project_id, task_type, exclude)
         return cell[-1].order + 1 if cell else 0
+
+    def _next_today_order(self, day: date, exclude: str | None = None) -> int:
+        orders = [
+            t.today_order
+            for t in self._tasks.values()
+            if t.planned_for == day and t.id != exclude and t.today_order is not None
+        ]
+        return max(orders) + 1 if orders else 0
 
     @staticmethod
     def _check_project_id(project_id: str | None) -> None:
@@ -284,6 +292,8 @@ class TaskRepository:
         self._ensure_loaded()
         self._check_project_id(task.project_id)
         updates: dict = {"order": self._next_order(task.project_id, task.task_type)}
+        if task.planned_for is not None and task.today_order is None:
+            updates["today_order"] = self._next_today_order(task.planned_for)
         if task.id in self._tasks or self._path(task.id).exists():
             updates["id"] = new_id()
         task = task.model_copy(update=updates)
@@ -311,6 +321,9 @@ class TaskRepository:
         if (task.project_id, task.task_type) != (old.project_id, old.task_type):
             self._check_project_id(task.project_id)
             task = task.model_copy(update={"order": self._next_order(task.project_id, task.task_type, exclude=id)})
+        if "planned_for" in changes.model_fields_set and task.planned_for != old.planned_for:
+            order = None if task.planned_for is None else self._next_today_order(task.planned_for, exclude=id)
+            task = task.model_copy(update={"today_order": order})
         self._write(task)
         return task
 
@@ -336,6 +349,32 @@ class TaskRepository:
         if source != (project_id, task_type):
             self._renumber(self._cell(source[0], source[1], exclude=id), force=set())
         return result
+
+    def reorder_today(self, day: date, ids: Sequence[str]) -> list[Task]:
+        """Put `ids` first, in that order, in the open tasks pinned to `day`; the rest follow."""
+        self._ensure_loaded()
+        if len(set(ids)) != len(ids):
+            raise ValueError("duplicate task ids")
+        for id in ids:
+            t = self.get(id)  # TaskNotFound if missing
+            if t.status == Status.DONE or t.planned_for != day:
+                raise ValueError(f"task {id} isn't on the list for {day}")
+        listed = set(ids)
+        rest = sorted(
+            (
+                t
+                for t in self._tasks.values()
+                if t.planned_for == day and t.status != Status.DONE and t.id not in listed
+            ),
+            key=lambda t: (t.today_order is None, t.today_order or 0),
+        )
+        out = []
+        for i, t in enumerate([self._tasks[id] for id in ids] + rest):
+            if t.today_order != i:
+                t = t.model_copy(update={"today_order": i})
+                self._write(t)
+            out.append(t)
+        return out
 
     def _renumber(self, cell: list[Task], force: set[str]) -> list[Task]:
         out = []

@@ -19,6 +19,7 @@ from .api import projects as projects_api
 from .api import settings as settings_api
 from .api import state as state_api
 from .api import tasks as tasks_api
+from .api import today as today_api
 from .config import AppSettings, RuntimeOptions
 from .context import AppContext
 from .security import LocalOnlyMiddleware
@@ -80,7 +81,7 @@ def create_app(
     app.include_router(state_api.router)
     app.include_router(settings_api.router)
     app.include_router(events_api.router)
-    for module in (tasks_api, projects_api, notes_api, intake_api):
+    for module in (tasks_api, projects_api, notes_api, intake_api, today_api):
         app.include_router(module.router)
     @app.api_route(
         "/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False
