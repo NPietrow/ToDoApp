@@ -20,7 +20,8 @@
   const done = $derived(tick.done)
   const pinned = $derived(isToday(task, app.today))
 
-  // A drag that ends over its own card must not also count as a click.
+  // A drag that ends over its own card must not also count as a click. A drag the browser
+  // dropped without a dragend is forgotten at the next press.
   let dragged = false
 
   function togglePin() {
@@ -73,8 +74,8 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
-<div class="t" class:pin={pinned} class:done class:picking={ui.picking} class:picked={ui.picking && pinned}
-  data-task-id={task.id} draggable={!ui.picking} ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
+<div class="t" class:pin={pinned} class:done class:picking={ui.picking} class:picked={ui.picking && pinned && !done}
+  data-task-id={task.id} draggable={!ui.picking} ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))} onpointerdown={() => (dragged = false)}
   {onclick} role="group" tabindex="0" {onkeydown}
   oncontextmenu={(e) => {
     e.preventDefault()

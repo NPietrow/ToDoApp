@@ -1,6 +1,6 @@
 <script lang="ts">
   // One project × task type cell: the visible tasks, in `order`. Ends with the "+ add" line,
-  // except in picking mode, where a click means only pick.
+  // hidden in picking mode, where a click means only pick.
   import { moveTask } from '../lib/api'
   import { isVisibleOnGrid } from '../lib/dates'
   import { dropIndex } from '../lib/dnd'
@@ -86,7 +86,8 @@
   {#each tasks as task (task.id)}
     <TaskItem {task} />
   {/each}
-  {#if !ui.picking}<AddLine {projectId} {taskType} />{/if}
+  <!-- Hidden, not removed, while picking, so half-typed text survives. -->
+  <div class="add-slot" hidden={ui.picking}><AddLine {projectId} {taskType} /></div>
 </div>
 
 <style>
@@ -98,6 +99,13 @@
     min-height: 40px;
     padding: 6px 8px;
     box-sizing: border-box;
+  }
+  /* The add line lays out as if it were the cell's own child. */
+  .add-slot {
+    display: contents;
+  }
+  .add-slot[hidden] {
+    display: none;
   }
   .over {
     outline: 2px dashed var(--accent, #9a9a9a);

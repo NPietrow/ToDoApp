@@ -8,6 +8,7 @@ import App from '../src/App.svelte'
 import * as api from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
+import { todayWrites } from '../src/lib/today'
 import type { AppState, Task } from '../src/lib/types'
 import { ui } from '../src/lib/ui.svelte'
 import { fixtureState, makeTask, resetApp, TODAY } from './fixtures'
@@ -24,6 +25,8 @@ let served: AppState
 let getState: ReturnType<typeof vi.spyOn>
 let patchTask: ReturnType<typeof vi.spyOn>
 let logPlanning: ReturnType<typeof vi.spyOn>
+/** Lets a held write through; called after each test so a failed test cannot block the write queue. */
+let release: (() => void) | undefined
 
 /** The fixture with nothing pinned for today. */
 const unpinned = (): Task[] => fixtureState().tasks.map((t) => ({ ...t, planned_for: null }))
@@ -38,6 +41,28 @@ async function renderApp(opts: { tasks?: Task[]; picking?: boolean; view?: 'grid
   await waitFor(() => expect(getState).toHaveBeenCalled())
   await tick()
   return result
+}
+
+/** Let every queued Today write, the reload after it and the log call settle. */
+async function endPickingSettled() {
+  await todayWrites(() => Promise.resolve())
+  for (let i = 0; i < 5; i++) await tick()
+}
+
+/** A fake server: patches and ticks change `served`, as the real one does. Returns the setDone spy. */
+function serveWrites() {
+  patchTask.mockImplementation(async (id: string, changes: Partial<Task>) => {
+    served.tasks = served.tasks.map((t) => (t.id === id ? { ...t, ...changes } : t))
+    return served.tasks.find((t) => t.id === id)!
+  })
+  return vi.spyOn(api, 'setDone').mockImplementation(async (id: string, done: boolean) => {
+    served.tasks = served.tasks.map((t) =>
+      t.id === id
+        ? { ...t, status: done ? 'done' : 'not_started', completed_at: done ? new Date().toISOString() : null, updated_at: new Date().toISOString() }
+        : t,
+    )
+    return served.tasks.find((t) => t.id === id)!
+  })
 }
 
 const banner = () => screen.getByRole('region', { name: 'Picking for today' })
@@ -59,6 +84,7 @@ beforeEach(() => {
   user = userEvent.setup()
 })
 afterEach(() => {
+  release?.()
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -198,12 +224,103 @@ describe('Picking mode', () => {
   })
 
   test('leaving with no open picks does not log', async () => {
-    await renderApp({ tasks: unpinned() })
+    // The only pin for today is done: it is not a pick.
+    await renderApp({
+      tasks: [
+        ...unpinned().filter((t) => t.id !== 't1'),
+        makeTask({ id: 'd', title: 'Done one', planned_for: TODAY, status: 'done', completed_at: new Date().toISOString() }),
+      ],
+    })
+    const calls = getState.mock.calls.length
     await user.click(screen.getByRole('button', { name: 'Done planning' }))
     expect(ui.view).toBe('today')
     expect(ui.picking).toBe(false)
-    await tick()
+    // Leaving reloads the state before it counts: wait for that, then for the count.
+    await waitFor(() => expect(getState).toHaveBeenCalledTimes(calls + 1))
+    await endPickingSettled()
     expect(logPlanning).not.toHaveBeenCalled()
+  })
+
+  test('a pick that is ticked done no longer counts, and leaving does not log', async () => {
+    const setDone = serveWrites()
+    await renderApp({ tasks: unpinned() })
+    await user.click(screen.getByText('Chase Sam re: sensor access'))
+    await waitFor(() => expect(banner().textContent?.replace(/\s+/g, ' ')).toContain(BANNER(1)))
+    await user.click(screen.getByRole('checkbox', { name: 'Chase Sam re: sensor access' }))
+    expect(setDone).toHaveBeenCalledWith('t3', true)
+    await waitFor(() => expect(banner().textContent?.replace(/\s+/g, ' ')).toContain(BANNER(0)))
+    const calls = getState.mock.calls.length
+    await user.click(screen.getByRole('button', { name: 'Done planning' }))
+    await waitFor(() => expect(getState).toHaveBeenCalledTimes(calls + 1))
+    await endPickingSettled()
+    expect(logPlanning).not.toHaveBeenCalled()
+  })
+
+  test('a pick still on its way when leaving is counted once it lands', async () => {
+    patchTask.mockImplementation(
+      (id: string, changes: Partial<Task>) =>
+        new Promise((resolve) => {
+          release = () => {
+            release = undefined
+            served.tasks = served.tasks.map((t) => (t.id === id ? { ...t, ...changes } : t))
+            resolve(served.tasks.find((t) => t.id === id)!)
+          }
+        }),
+    )
+    await renderApp({ tasks: unpinned() })
+    await user.click(screen.getByText('Chase Sam re: sensor access'))
+    await waitFor(() => expect(patchTask).toHaveBeenCalledWith('t3', { planned_for: TODAY }))
+    await user.click(screen.getByRole('button', { name: 'Done planning' }))
+    expect(ui.view).toBe('today')
+    for (let i = 0; i < 5; i++) await tick()
+    expect(logPlanning).not.toHaveBeenCalled()
+    release!()
+    await waitFor(() => expect(logPlanning).toHaveBeenCalledTimes(1))
+    expect(logPlanning).toHaveBeenCalledWith(TODAY)
+    await endPickingSettled()
+    expect(logPlanning).toHaveBeenCalledTimes(1)
+  })
+
+  test('a done task that is still pinned is not marked picked', async () => {
+    await renderApp({
+      tasks: [
+        makeTask({ id: 'a', title: 'Open one', planned_for: TODAY }),
+        makeTask({ id: 'd', title: 'Done one', planned_for: TODAY, status: 'done', completed_at: new Date().toISOString() }),
+      ],
+    })
+    expect(card('Open one')).toHaveClass('picked')
+    expect(card('Done one')).not.toHaveClass('picked')
+    // It is still pinned, so its pin stays dark.
+    expect(card('Done one').querySelector('.pin-btn')).toHaveClass('on')
+  })
+
+  test('a drag that never ended does not swallow the next pick', async () => {
+    await renderApp({ tasks: unpinned(), picking: false })
+    await fireEvent.dragStart(card('Chase Sam re: sensor access'))
+    // No dragend: the browser dropped it (for example, the drag left the window).
+    ui.picking = true
+    await tick()
+    await user.click(screen.getByText('Chase Sam re: sensor access'))
+    expect(patchTask).toHaveBeenCalledWith('t3', { planned_for: TODAY })
+  })
+
+  test('a drag that never ended does not swallow the next open click', async () => {
+    await renderApp({ tasks: unpinned(), picking: false })
+    await fireEvent.dragStart(card('Chase Sam re: sensor access'))
+    await user.click(screen.getByText('Chase Sam re: sensor access'))
+    expect(ui.openTaskId).toBe('t3')
+  })
+
+  test('half-typed + add text survives picking', async () => {
+    await renderApp({ tasks: unpinned(), picking: false })
+    const cell = card('Chase Sam re: sensor access').closest<HTMLElement>('[role=gridcell]')!
+    await user.click(within(cell).getByRole('button', { name: '+ add' }))
+    await user.type(within(cell).getByRole('textbox', { name: 'New task' }), 'Half typed')
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Plan today' }))
+    expect(within(cell).queryByRole('textbox', { name: 'New task' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Grid' }))
+    expect(ui.picking).toBe(false)
+    expect(within(cell).getByRole('textbox', { name: 'New task' })).toHaveValue('Half typed')
   })
 
   test('clicking the Grid tab ends picking on the Grid and still logs', async () => {
