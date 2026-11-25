@@ -1,5 +1,5 @@
 // The Today list: what's pinned for today, in the user's order, and what's been done from it.
-import { patchTask, reorderToday } from './api'
+import { ApiError, patchTask, reorderToday } from './api'
 import { localDateOf } from './dates'
 import { serial } from './serial'
 import { refresh } from './state.svelte'
@@ -48,16 +48,19 @@ export function longDate(day: string): string {
 /** Today's pin and order writes, sent one at a time in the order they were made. */
 export const todayWrites = serial()
 
-/** Pin a task for today, or unpin it. The server places a new pin at the bottom of the list. */
-export async function setPinned(task: Task, on: boolean, today: string): Promise<void> {
+/** Pin a task for today, or unpin it. The server places a new pin at the bottom of the list.
+ *  Every pin write goes through here, so pins and reorders reach the server in the order they
+ *  were made. A failure toasts. Resolves to whether it worked. */
+export async function setPinned(task: Task, on: boolean, today: string): Promise<boolean> {
   try {
     await todayWrites(() => patchTask(task.id, { planned_for: on ? today : null }))
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     showToast({ message: `Couldn't update task: ${reason}` })
-    return
+    return false
   }
   await refresh()
+  return true
 }
 
 /** `ids` with `id` moved one place up (-1) or down (1). It stays put at either end. */
@@ -75,7 +78,13 @@ export async function applyOrder(ids: string[], today: string): Promise<void> {
   try {
     await todayWrites(() => reorderToday(today, ids))
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    // A 422 means the list on screen is out of date (a task left it): the reload below fixes that.
+    const reason =
+      err instanceof ApiError && err.status === 422
+        ? 'the list changed, so it has been reloaded'
+        : err instanceof Error
+          ? err.message
+          : String(err)
     showToast({ message: `Couldn't reorder: ${reason}` })
   }
   await refresh()

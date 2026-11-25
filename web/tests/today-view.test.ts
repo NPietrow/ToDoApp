@@ -378,14 +378,24 @@ describe('Today view', () => {
     })
 
     test('reorder failure toasts and refreshes', async () => {
-      vi.spyOn(api, 'reorderToday').mockRejectedValue(new api.ApiError(422, 'not pinned'))
+      vi.spyOn(api, 'reorderToday').mockRejectedValue(new api.ApiError(422, 'task 1234 is not pinned'))
       await renderToday(three())
       const calls = getState.mock.calls.length
       rowOf('Alpha').focus()
       await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
-      expect(await screen.findByText("Couldn't reorder: not pinned")).toBeInTheDocument()
+      expect(
+        await screen.findByText("Couldn't reorder: the list changed, so it has been reloaded"),
+      ).toBeInTheDocument()
       await waitFor(() => expect(getState.mock.calls.length).toBe(calls + 1))
       await waitFor(() => expect(titles()).toEqual(['a', 'b', 'c']))
+    })
+
+    test('other reorder failures show their reason', async () => {
+      vi.spyOn(api, 'reorderToday').mockRejectedValue(new api.ApiError(500, 'disk full'))
+      await renderToday(three())
+      rowOf('Alpha').focus()
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+      expect(await screen.findByText("Couldn't reorder: disk full")).toBeInTheDocument()
     })
 
     test('three quick Alt+ArrowDown presses send three requests in order', async () => {

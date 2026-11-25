@@ -98,7 +98,7 @@ export const reorderToday = (date: string, ids: string[]) =>
 /** Record that `date` was planned (Plan today). Resolves to every planned day, oldest first. */
 export const logPlanning = (date: string) => request<{ dates: string[] }>('POST', '/api/planning', { date })
 
-export const deleteTask =(id: string) => request<void>('DELETE', `/api/tasks/${enc(id)}`)
+export const deleteTask = (id: string) => request<void>('DELETE', `/api/tasks/${enc(id)}`)
 
 export const restoreTask = (id: string) => request<Task>('POST', `/api/tasks/${enc(id)}/restore`)
 

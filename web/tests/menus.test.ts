@@ -11,6 +11,7 @@ import * as api from '../src/lib/api'
 import { ApiError } from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
 import { clearToast, showToast, toast } from '../src/lib/toast.svelte'
+import { todayWrites } from '../src/lib/today'
 import { ui } from '../src/lib/ui.svelte'
 import { fixtureState, makeProject, makeTask, resetApp, TODAY } from './fixtures'
 
@@ -129,6 +130,20 @@ describe('task menu', () => {
     await rightClick(card('Finish pilot interim report'))
     await user.click(await screen.findByRole('menuitem', { name: 'Remove from today' }))
     expect(patch).toHaveBeenCalledWith('t1', { planned_for: null })
+  })
+
+  test('Add to today waits its turn behind earlier Today writes', async () => {
+    const patch = vi.spyOn(api, 'patchTask').mockResolvedValue(makeTask({ id: 't3', title: 'x' }))
+    let release!: () => void
+    const earlier = todayWrites(() => new Promise<void>((r) => (release = r)))
+    render(Grid)
+    await rightClick(card('Chase Sam re: sensor access'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Add to today' }))
+    const sentEarly = patch.mock.calls.length
+    release()
+    await earlier
+    expect(sentEarly).toBe(0)
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('t3', { planned_for: TODAY }))
   })
 
   test('Set status patches the status; the current one is disabled', async () => {

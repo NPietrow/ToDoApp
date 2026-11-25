@@ -12,6 +12,7 @@
   import { app, refresh } from '../lib/state.svelte'
   import { continueBullet, linkify } from '../lib/text'
   import { showToast } from '../lib/toast.svelte'
+  import { setPinned } from '../lib/today'
   import { STATUS_LABELS, TASK_TYPES, type Status, type TaskChanges } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
   import DatePicker from './DatePicker.svelte'
@@ -173,8 +174,12 @@
 
   function onToggleToday(e: Event) {
     const box = e.currentTarget as HTMLInputElement
-    void save({ planned_for: box.checked ? app.today : null }).then((ok) => {
-      if (!ok) box.checked = !box.checked
+    if (!task) return
+    // Through the Today write queue, so it can't overtake a pick or reorder still on its way.
+    void setPinned(task, box.checked, app.today).then((ok) => {
+      if (ok) return
+      box.checked = !box.checked
+      void refresh()
     })
   }
 
