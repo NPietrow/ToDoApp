@@ -323,6 +323,35 @@ describe('Picking mode', () => {
     expect(within(cell).getByRole('textbox', { name: 'New task' })).toHaveValue('Half typed')
   })
 
+  test('typed + add text survives Done planning', async () => {
+    await renderApp({ tasks: unpinned(), picking: false })
+    const cell = card('Chase Sam re: sensor access').closest<HTMLElement>('[role=gridcell]')!
+    await user.click(within(cell).getByRole('button', { name: '+ add' }))
+    await user.type(within(cell).getByRole('textbox', { name: 'New task' }), 'Half typed')
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Plan today' }))
+    await user.click(card('Chase Sam re: sensor access'))
+    await user.click(screen.getByRole('button', { name: 'Done planning' }))
+    expect(ui.view).toBe('today')
+    await endPickingSettled()
+    await user.click(screen.getByRole('button', { name: 'Grid' }))
+    expect(within(cell).getByRole('textbox', { name: 'New task' })).toHaveValue('Half typed')
+  })
+
+  test('a Grid card focused when Escape goes to Today ignores keys while hidden', async () => {
+    const del = vi.spyOn(api, 'deleteTask').mockResolvedValue(undefined)
+    await renderApp({ tasks: unpinned() })
+    const focused = card('Chase Sam re: sensor access')
+    focused.focus()
+    await user.keyboard('{Escape}')
+    expect(ui.view).toBe('today')
+    await endPickingSettled()
+    expect(focused).not.toHaveFocus()
+    await user.keyboard('{Delete}')
+    await user.keyboard('{Enter}')
+    expect(del).not.toHaveBeenCalled()
+    expect(ui.openTaskId).toBeNull()
+  })
+
   test('clicking the Grid tab ends picking on the Grid and still logs', async () => {
     await renderApp()
     await user.click(screen.getByRole('button', { name: 'Grid' }))

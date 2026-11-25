@@ -35,7 +35,9 @@ async function renderToday(tasks?: Task[], projects = fixtureState().projects) {
   return result
 }
 
-const rowOf = (title: string) => screen.getByText(title).closest<HTMLElement>('[data-task-id]')!
+// The Grid stays mounted, hidden, under Today, so look only inside the Today view (its <main>).
+const todayView = () => within(screen.getByRole('main'))
+const rowOf = (title: string) => todayView().getByText(title).closest<HTMLElement>('[data-task-id]')!
 
 beforeEach(() => {
   resetApp()
@@ -170,7 +172,7 @@ describe('Today view', () => {
   test('empty state offers Plan today', async () => {
     await renderToday([makeTask({ id: 'u', title: 'Not pinned' })])
     expect(screen.getByText('Nothing picked for today')).toBeInTheDocument()
-    expect(screen.queryByText('Not pinned')).toBeNull()
+    expect(todayView().queryByText('Not pinned')).toBeNull()
     const main = screen.getByText('Nothing picked for today').closest('section, main, div')!
     await user.click(within(main as HTMLElement).getByRole('button', { name: 'Plan today' }))
     expect(ui.picking).toBe(true)
@@ -205,7 +207,7 @@ describe('Today view', () => {
   test('clicking a row opens the task pop-up and Escape returns focus to the row', async () => {
     await renderToday()
     const row = rowOf('Finish pilot interim report')
-    await user.click(screen.getByText('Finish pilot interim report'))
+    await user.click(todayView().getByText('Finish pilot interim report'))
     expect(ui.openTaskId).toBe('t1')
     const dialog = await screen.findByRole('dialog')
     // Tab past the last control wraps to the first.
@@ -254,11 +256,11 @@ describe('Today view', () => {
     const patch = vi.spyOn(api, 'patchTask')
     const setDone = vi.spyOn(api, 'setDone')
     await renderToday()
-    expect(screen.getByText('Finish pilot interim report')).toBeInTheDocument()
+    expect(todayView().getByText('Finish pilot interim report')).toBeInTheDocument()
     const calls = getState.mock.calls.length
     app.today = '2026-11-14'
     await tick()
-    expect(screen.queryByText('Finish pilot interim report')).toBeNull()
+    expect(todayView().queryByText('Finish pilot interim report')).toBeNull()
     expect(screen.getByText('Nothing picked for today')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: longDate('2026-11-14') })).toBeInTheDocument()
     expect(getState.mock.calls.length).toBe(calls)
@@ -452,6 +454,68 @@ describe('Today view', () => {
       ])
       expect(rowOf('Zulu')).not.toHaveAttribute('draggable', 'true')
       expect(rowOf('Alpha')).toHaveAttribute('draggable', 'true')
+    })
+  })
+
+  describe('the Grid stays mounted under Today', () => {
+    const quickCell = () =>
+      within(screen.getByRole('row', { name: 'Quick' })).getAllByRole('gridcell')[0]
+
+    test('typed + add text survives a trip to Today and back', async () => {
+      await renderToday()
+      await user.click(screen.getByRole('button', { name: 'Grid' }))
+      const cell = quickCell()
+      await user.click(within(cell).getByRole('button', { name: '+ add' }))
+      await user.type(within(cell).getByRole('textbox', { name: 'New task' }), 'Half typed')
+      await user.click(screen.getByRole('button', { name: 'Today' }))
+      expect(screen.queryByRole('textbox', { name: 'New task' })).toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Grid' }))
+      expect(within(quickCell()).getByRole('textbox', { name: 'New task' })).toHaveValue('Half typed')
+    })
+
+    test('pop-up opened from a Grid card returns focus to that card', async () => {
+      await renderToday()
+      await user.click(screen.getByRole('button', { name: 'Grid' }))
+      const card = within(screen.getByRole('grid')).getByText('Finish pilot interim report')
+        .closest<HTMLElement>('[data-task-id]')!
+      await user.click(within(card).getByText('Finish pilot interim report'))
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(card).toHaveFocus()
+    })
+
+    test('a Today row redrawn under its pop-up gets focus back, not the hidden Grid card', async () => {
+      vi.spyOn(api, 'setDone').mockImplementation(async (id) => {
+        const t = served.tasks.find((x) => x.id === id)!
+        Object.assign(t, {
+          status: 'done',
+          status_before_done: t.status,
+          completed_at: new Date(2026, 10, 13, 10, 0).toISOString(),
+          updated_at: new Date(2026, 10, 13, 10, 0).toISOString(),
+        })
+        return t
+      })
+      await renderToday()
+      // Done cards show on the Grid too, so the hidden Grid keeps a copy of the ticked task.
+      served.settings.show_completed = true
+      app.settings.show_completed = true
+      await user.click(todayView().getByText('Finish pilot interim report'))
+      const dialog = await screen.findByRole('dialog')
+      await user.click(within(dialog).getByRole('checkbox', { name: 'Done' }))
+      const done = await screen.findByRole('region', { name: 'Done today' })
+      const row = within(done).getByText('Finish pilot interim report').closest<HTMLElement>('[data-task-id]')!
+      expect(document.querySelectorAll('[data-task-id="t1"]')).toHaveLength(2)
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(row).toHaveFocus()
+    })
+
+    test('a menu opened on Today shows once, not also in the hidden Grid', async () => {
+      await renderToday()
+      await user.pointer({ keys: '[MouseRight]', target: rowOf('Finish pilot interim report') })
+      expect(await screen.findByRole('menuitem', { name: 'Remove from today' })).toBeInTheDocument()
+      expect(document.querySelectorAll('[role=menu]')).toHaveLength(1)
     })
   })
 })

@@ -27,6 +27,17 @@
     }
   })
 
+  let gridView: HTMLElement | undefined = $state()
+
+  // A Grid control that had focus as the Grid was hidden (Escape out of picking, say) must not
+  // keep it: keys pressed afterwards would still reach the hidden card. Browsers usually drop
+  // that focus themselves, but not always at once.
+  $effect(() => {
+    if (ui.view === 'grid' || !gridView) return
+    const at = document.activeElement
+    if (at instanceof HTMLElement && gridView.contains(at)) at.blur()
+  })
+
   $effect(() => {
     document.documentElement.style.setProperty(
       '--base-size',
@@ -42,7 +53,10 @@
     <div class="app">
       <TopBar />
       {#if ui.picking}<PickingBanner />{/if}
-      {#if ui.view === 'today'}<TodayView />{:else}<Grid />{/if}
+      <!-- The Grid stays mounted under Today, only hidden, so half-typed "+ add" text survives a
+           trip there. Hidden means not shown, not focusable and not announced. -->
+      <div class="grid-view" hidden={ui.view !== 'grid'} bind:this={gridView}><Grid /></div>
+      {#if ui.view === 'today'}<TodayView />{/if}
     </div>
     {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
     {#if ui.modal === 'paste'}<PasteTasksModal />

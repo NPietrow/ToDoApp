@@ -190,7 +190,12 @@
     void deleteWithUndo(task)
   }
 
-  const returnFocus = () => document.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`)
+  // The Grid stays mounted, hidden, under Today, so the task may be on the page twice: pick the
+  // copy on the view that is showing.
+  const returnFocus = () =>
+    [...document.querySelectorAll<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`)].find(
+      (el) => !el.closest('[hidden]'),
+    ) ?? null
 </script>
 
 <svelte:window onpagehide={() => flush(true)} />
