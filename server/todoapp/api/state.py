@@ -23,11 +23,13 @@ def state(request: Request) -> dict:
             projects_readable=projects_problem is None,
         )
         notes, notes_problems = ctx.notes.all(p.id for p in projects)
+        planning_problem = ctx.planning.problem()
         problems = [
             *([projects_problem] if projects_problem else []),
             *scan.problems,
             *notes_problems,
             *ctx.all_inbox_problems(),
+            *([planning_problem] if planning_problem else []),
         ]
         return {
             "projects": [p.model_dump(mode="json") for p in projects],

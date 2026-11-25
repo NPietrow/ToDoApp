@@ -33,3 +33,29 @@ def test_patch_planned_for_assigns_today_order(client):
     ra = client.patch(f"/api/tasks/{a}", json={"planned_for": DAY}).json()
     rb = client.patch(f"/api/tasks/{b}", json={"planned_for": DAY}).json()
     assert (ra["today_order"], rb["today_order"]) == (0, 1)
+
+
+def _write_bad_planning(tmp_path):
+    p = tmp_path / "data" / "log" / "planning.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_bytes(b"{not json")
+    return p
+
+
+def test_planning_endpoint_records_date(client):
+    r = client.post("/api/planning", json={"date": DAY})
+    assert r.status_code == 200
+    assert r.json() == {"dates": [DAY]}
+
+
+def test_planning_endpoint_422_when_unreadable(client, tmp_path):
+    p = _write_bad_planning(tmp_path)
+    r = client.post("/api/planning", json={"date": DAY})
+    assert r.status_code == 422
+    assert p.read_bytes() == b"{not json"
+
+
+def test_state_lists_planning_problem(client, tmp_path):
+    _write_bad_planning(tmp_path)
+    problems = client.get("/api/state").json()["problems"]
+    assert any(p["file"] == "log/planning.json" for p in problems)
