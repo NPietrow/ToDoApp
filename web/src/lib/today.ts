@@ -1,5 +1,5 @@
 // The Today list: what's pinned for today, in the user's order, and what's been done from it.
-import { patchTask } from './api'
+import { patchTask, reorderToday } from './api'
 import { localDateOf } from './dates'
 import { serial } from './serial'
 import { refresh } from './state.svelte'
@@ -56,6 +56,27 @@ export async function setPinned(task: Task, on: boolean, today: string): Promise
     const reason = err instanceof Error ? err.message : String(err)
     showToast({ message: `Couldn't update task: ${reason}` })
     return
+  }
+  await refresh()
+}
+
+/** `ids` with `id` moved one place up (-1) or down (1). It stays put at either end. */
+export function moveInList(ids: string[], id: string, delta: -1 | 1): string[] {
+  const from = ids.indexOf(id)
+  const to = from + delta
+  if (from === -1 || to < 0 || to >= ids.length) return ids
+  const next = [...ids]
+  ;[next[from], next[to]] = [next[to], next[from]]
+  return next
+}
+
+/** Save a new order for today's list, then reload. A failure toasts, and the reload puts the saved order back. */
+export async function applyOrder(ids: string[], today: string): Promise<void> {
+  try {
+    await todayWrites(() => reorderToday(today, ids))
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    showToast({ message: `Couldn't reorder: ${reason}` })
   }
   await refresh()
 }

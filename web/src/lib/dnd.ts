@@ -18,3 +18,6 @@ export function dropIndex(
   const at = fullIds.indexOf(next.id)
   return at === -1 ? fullIds.length : at
 }
+
+/** The drag data type of a row in the Today list. */
+export const TODAY_DRAG = 'text/x-today-id'

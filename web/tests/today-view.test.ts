@@ -233,4 +233,139 @@ describe('Today view', () => {
     expect(screen.queryByRole('progressbar')).toBeNull()
     expect(container.textContent).not.toMatch(/\d+ of \d+/)
   })
+
+  describe('reordering', () => {
+    const three = () => [
+      makeTask({ id: 'a', title: 'Alpha', planned_for: TODAY, today_order: 0 }),
+      makeTask({ id: 'b', title: 'Bravo', planned_for: TODAY, today_order: 1 }),
+      makeTask({ id: 'c', title: 'Charlie', planned_for: TODAY, today_order: 2 }),
+    ]
+    const titles = () =>
+      [...document.querySelectorAll<HTMLElement>('.list [data-task-id]')].map((r) => r.dataset.taskId)
+
+    /** The server applies a reorder to `served`, as the real one does. */
+    const serve = () =>
+      vi.spyOn(api, 'reorderToday').mockImplementation(async (_date, ids) => {
+        ids.forEach((id, i) => (served.tasks.find((t) => t.id === id)!.today_order = i))
+        return []
+      })
+
+    test('Alt+ArrowDown moves the focused row down', async () => {
+      const reorder = serve()
+      await renderToday(three())
+      rowOf('Alpha').focus()
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+      expect(reorder).toHaveBeenCalledWith(TODAY, ['b', 'a', 'c'])
+      expect(titles()).toEqual(['b', 'a', 'c'])
+      await waitFor(() => expect(getState.mock.calls.length).toBeGreaterThan(1))
+      await tick()
+      expect(titles()).toEqual(['b', 'a', 'c'])
+      expect(rowOf('Alpha')).toHaveFocus()
+    })
+
+    test('Alt+ArrowUp on the first row sends nothing', async () => {
+      const reorder = serve()
+      await renderToday(three())
+      rowOf('Alpha').focus()
+      await user.keyboard('{Alt>}{ArrowUp}{/Alt}')
+      expect(reorder).not.toHaveBeenCalled()
+    })
+
+    function dt() {
+      const data: Record<string, string> = {}
+      return {
+        effectAllowed: '',
+        dropEffect: '',
+        get types() {
+          return Object.keys(data)
+        },
+        setData: (t: string, v: string) => (data[t] = v),
+        getData: (t: string) => data[t] ?? '',
+      }
+    }
+    function fire(el: Element, type: string, d: ReturnType<typeof dt>, clientY = 0) {
+      const ev = new Event(type, { bubbles: true, cancelable: true })
+      Object.assign(ev, { dataTransfer: d, clientY })
+      el.dispatchEvent(ev)
+      return ev
+    }
+
+    test('drag a row to a new position', async () => {
+      const reorder = serve()
+      await renderToday(three())
+      document.querySelectorAll<HTMLElement>('.list [data-task-id]').forEach((c, i) => {
+        c.getBoundingClientRect = () => ({ top: i * 20, bottom: i * 20 + 20, height: 20 }) as DOMRect
+      })
+      const d = dt()
+      fire(rowOf('Alpha'), 'dragstart', d)
+      const over = fire(rowOf('Charlie'), 'dragover', d)
+      expect(over.defaultPrevented).toBe(true)
+      // 45 is below Bravo's midpoint (30) and above Charlie's (50): between them.
+      fire(rowOf('Charlie'), 'drop', d, 45)
+      await waitFor(() => expect(reorder).toHaveBeenCalledWith(TODAY, ['b', 'a', 'c']))
+      await waitFor(() => expect(titles()).toEqual(['b', 'a', 'c']))
+    })
+
+    test('dropping a row where it already is sends nothing', async () => {
+      const reorder = serve()
+      await renderToday(three())
+      document.querySelectorAll<HTMLElement>('.list [data-task-id]').forEach((c, i) => {
+        c.getBoundingClientRect = () => ({ top: i * 20, bottom: i * 20 + 20, height: 20 }) as DOMRect
+      })
+      const d = dt()
+      fire(rowOf('Alpha'), 'dragstart', d)
+      fire(rowOf('Bravo'), 'drop', d, 15)
+      expect(reorder).not.toHaveBeenCalled()
+    })
+
+    test('a drag that starts on the tick box is cancelled', async () => {
+      await renderToday(three())
+      const d = dt()
+      const ev = fire(screen.getByRole('checkbox', { name: 'Alpha' }), 'dragstart', d)
+      expect(ev.defaultPrevented).toBe(true)
+    })
+
+    test('reorder failure toasts and refreshes', async () => {
+      vi.spyOn(api, 'reorderToday').mockRejectedValue(new api.ApiError(422, 'not pinned'))
+      await renderToday(three())
+      const calls = getState.mock.calls.length
+      rowOf('Alpha').focus()
+      await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+      expect(await screen.findByText("Couldn't reorder: not pinned")).toBeInTheDocument()
+      await waitFor(() => expect(getState.mock.calls.length).toBe(calls + 1))
+      await waitFor(() => expect(titles()).toEqual(['a', 'b', 'c']))
+    })
+
+    test('three quick Alt+ArrowDown presses send three requests in order', async () => {
+      const reorder = serve()
+      await renderToday([
+        ...three(),
+        makeTask({ id: 'd', title: 'Delta', planned_for: TODAY, today_order: 3 }),
+      ])
+      rowOf('Alpha').focus()
+      await user.keyboard('{Alt>}{ArrowDown}{ArrowDown}{ArrowDown}{/Alt}')
+      expect(reorder.mock.calls.map((c) => c[1])).toEqual([
+        ['b', 'a', 'c', 'd'],
+        ['b', 'c', 'a', 'd'],
+        ['b', 'c', 'd', 'a'],
+      ])
+      await waitFor(() => expect(titles()).toEqual(['b', 'c', 'd', 'a']))
+      expect(rowOf('Alpha')).toHaveFocus()
+    })
+
+    test("done rows can't be dragged", async () => {
+      await renderToday([
+        ...three(),
+        makeTask({
+          id: 'z',
+          title: 'Zulu',
+          planned_for: TODAY,
+          status: 'done',
+          completed_at: new Date(2026, 10, 13, 9, 0).toISOString(),
+        }),
+      ])
+      expect(rowOf('Zulu')).not.toHaveAttribute('draggable', 'true')
+      expect(rowOf('Alpha')).toHaveAttribute('draggable', 'true')
+    })
+  })
 })

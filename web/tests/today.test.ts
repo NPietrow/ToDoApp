@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest'
-import { doneToday, longDate, todayTasks } from '../src/lib/today'
+import { describe, expect, test } from 'vitest'
+import { doneToday, longDate, moveInList, todayTasks } from '../src/lib/today'
 import { makeTask, TODAY, YESTERDAY_ISO } from './fixtures'
 
 /** Midday on TODAY, local time, as the server's UTC ISO string. */
@@ -50,4 +50,18 @@ test('doneToday needs pinned today and completed today', () => {
 test('longDate', () => {
   expect(longDate('2026-11-25')).toBe('Wednesday 25 November')
   expect(longDate(TODAY)).toBe('Friday 13 November')
+})
+
+describe('moveInList', () => {
+  test('moving up from the top or down from the bottom does nothing', () => {
+    expect(moveInList(['a', 'b', 'c'], 'a', -1)).toEqual(['a', 'b', 'c'])
+    expect(moveInList(['a', 'b', 'c'], 'c', 1)).toEqual(['a', 'b', 'c'])
+  })
+  test('a middle row moves up and down', () => {
+    expect(moveInList(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c'])
+    expect(moveInList(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'c', 'b'])
+  })
+  test('an unknown id changes nothing', () => {
+    expect(moveInList(['a', 'b'], 'x', 1)).toEqual(['a', 'b'])
+  })
 })

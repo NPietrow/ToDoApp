@@ -1,8 +1,10 @@
 <script lang="ts">
   // One row of the Today list: grip, tick box, title, due chip, task type, project chip and ×.
+  // Alt+Up/Down on the focused row moves it; so does dragging it.
   // A click anywhere else on the row opens the pop-up; right-click, Shift+F10 and the ContextMenu
   // key open the task menu; Enter opens the task. × only unpins. Done rows have no grip or ×.
   import { formatDue } from '../lib/dates'
+  import { TODAY_DRAG } from '../lib/dnd'
   import { colourOf } from '../lib/palette'
   import { app } from '../lib/state.svelte'
   import { setPinned } from '../lib/today'
@@ -10,7 +12,7 @@
   import { TASK_TYPES, type Task } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
 
-  let { task }: { task: Task } = $props()
+  let { task, onmove }: { task: Task; onmove?: (delta: -1 | 1) => void } = $props()
 
   const tick = tickBox(() => task)
   const done = $derived(tick.done)
@@ -20,8 +22,11 @@
   const colours = $derived(project ? colourOf(project.colour) : null)
   const typeLabel = $derived(TASK_TYPES.find((t) => t.key === task.task_type)?.label ?? '')
 
+  // A drag that ends over its own row must not also count as a click.
+  let dragged = false
+
   function onclick(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('a, .bx, .grip, .x')) return
+    if (dragged || (e.target as HTMLElement).closest('a, .bx, .grip, .x')) return
     ui.openTaskId = task.id
   }
 
@@ -29,9 +34,23 @@
     ui.contextMenu = { x, y, kind: 'task', id: task.id }
   }
 
+  // Only the row itself drags; the tick box and � never start one.
+  function dragStart(e: DragEvent) {
+    if ((e.target as HTMLElement).closest('.bx, .x')) {
+      e.preventDefault()
+      return
+    }
+    dragged = true
+    e.dataTransfer?.setData(TODAY_DRAG, task.id)
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (e.target !== e.currentTarget) return
-    if (e.key === 'Enter') {
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && onmove) {
+      e.preventDefault()
+      onmove(e.key === 'ArrowUp' ? -1 : 1)
+    } else if (e.key === 'Enter') {
       e.preventDefault()
       ui.openTaskId = task.id
     } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
@@ -45,6 +64,8 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the row is the keyboard target for Enter and the menu) -->
 <div class="row" class:done={task.status === 'done'} data-task-id={task.id} role="group"
   tabindex="0" style:--accent={colours?.accent} {onclick} {onkeydown}
+  draggable={task.status === 'done' ? undefined : 'true'} ondragstart={dragStart}
+  ondragend={() => setTimeout(() => (dragged = false))}
   oncontextmenu={(e) => {
     e.preventDefault()
     openMenu(e.clientX, e.clientY)
@@ -56,7 +77,7 @@
     <span class="grip" aria-hidden="true">⋮⋮</span>
   {/if}
   <button type="button" class="bx" class:on={done} role="checkbox" aria-checked={done}
-    aria-label={task.title} onclick={tick.toggle}
+    aria-label={task.title} draggable="false" onclick={tick.toggle}
   ></button>
   <span class="title">{task.title}</span>
   {#if task.due_date}<span class="chip due">{formatDue(task.due_date, app.today)}</span>{/if}
