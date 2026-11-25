@@ -125,6 +125,30 @@ describe('Today view', () => {
     })
   })
 
+  describe('narrow windows', () => {
+    test('the Today list is a named size container', async () => {
+      const { container } = await renderToday([
+        makeTask({ id: 'n1', title: 'Open one', planned_for: TODAY, today_order: 0 }),
+        makeTask({ id: 'n2', title: 'Done one', planned_for: TODAY, today_order: 1, status: 'done',
+          completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+      ])
+      const box = container.querySelector('[data-size-container="today"]')!
+      expect(box).not.toBeNull()
+      // Both the open list and Done today sit inside the one container.
+      expect(box.contains(rowOf('Open one'))).toBe(true)
+      expect(box.contains(rowOf('Done one'))).toBe(true)
+    })
+
+    test('task type cell is still rendered for narrow layouts to hide', async () => {
+      await renderToday([
+        makeTask({ id: 'n1', title: 'Open one', task_type: 'quick', planned_for: TODAY, today_order: 0 }),
+        makeTask({ id: 'n2', title: 'Done one', planned_for: TODAY, today_order: 1, status: 'done',
+          completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+      ])
+      for (const t of ['Open one', 'Done one']) expect(rowOf(t).querySelector('.c-type')).not.toBeNull()
+    })
+  })
+
   test('rows show title, due chip, task type and project chip', async () => {
     await renderToday([
       makeTask({

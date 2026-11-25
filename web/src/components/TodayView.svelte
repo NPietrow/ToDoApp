@@ -83,7 +83,7 @@
   })
 </script>
 
-<main class="today">
+<main class="today" data-size-container="today">
   <h1>{longDate(app.today)}</h1>
 
   {#if open.length === 0 && done.length === 0}
@@ -126,6 +126,8 @@
     max-width: 720px;
     margin: 0 auto;
     padding: 4px 16px 32px;
+    /* One size container for the open list and Done today; the rows query it by name. */
+    container: today / inline-size;
   }
   h1 {
     margin: 4px 0 12px;

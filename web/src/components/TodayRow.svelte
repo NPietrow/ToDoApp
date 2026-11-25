@@ -199,4 +199,14 @@
   .x:hover {
     color: var(--text);
   }
+  /* Narrow list: the title gets priority. The task type column goes (its cell stays in the DOM),
+     the project column narrows and the due column gives up a little. */
+  @container today (max-width: 559.98px) {
+    .row {
+      grid-template-columns: 12px 15px minmax(0, 1fr) 70px 92px 12px;
+    }
+    .c-type {
+      display: none;
+    }
+  }
 </style>
