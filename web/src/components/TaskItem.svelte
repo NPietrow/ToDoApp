@@ -7,25 +7,28 @@
   import { deleteWithUndo } from '../lib/menus'
   import { app } from '../lib/state.svelte'
   import { tickBox } from '../lib/tick.svelte'
+  import { setPinned } from '../lib/today'
   import type { Task } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
+  import PinIcon from './PinIcon.svelte'
 
   let { task }: { task: Task } = $props()
 
   const tick = tickBox(() => task)
   const done = $derived(tick.done)
+  const pinned = $derived(isToday(task, app.today))
 
   // A drag that ends over its own card must not also count as a click.
   let dragged = false
 
   function onclick(e: MouseEvent) {
-    if (dragged || (e.target as HTMLElement).closest('a, .bx')) return
+    if (dragged || (e.target as HTMLElement).closest('a, .bx, .pin-btn')) return
     ui.openTaskId = task.id
   }
 
   function dragStart(e: DragEvent) {
-    // Only the card itself drags; the tick box (and anything inside the card) never starts one.
-    if ((e.target as HTMLElement).closest('.bx')) {
+    // Only the card itself drags; the tick box and pin button (and anything inside the card) never starts one.
+    if ((e.target as HTMLElement).closest('.bx, .pin-btn')) {
       e.preventDefault()
       return
     }
@@ -56,7 +59,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
-<div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}
+<div class="t" class:pin={pinned} class:done data-task-id={task.id}
   draggable="true" ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
   {onclick} role="group" tabindex="0" {onkeydown}
   oncontextmenu={(e) => {
@@ -73,6 +76,13 @@
     {#if task.status === 'blocked'}<span class="chip blk">Blocked</span>{/if}
     {#if task.description}<span class="desc" role="img" aria-label="has description">≡</span>{/if}
   </span>
+  <button type="button" class="pin-btn" class:on={pinned} draggable="false"
+    aria-label={pinned ? 'Remove from today' : 'Add to today'}
+    onclick={(e) => {
+      e.stopPropagation()
+      void setPinned(task, !pinned, app.today)
+    }}
+  ><PinIcon filled={pinned} /></button>
 </div>
 
 <style>
@@ -122,6 +132,30 @@
     border-radius: 4px;
     background: #fff;
     cursor: pointer;
+  }
+  /* Revealed instantly on hover or keyboard focus; always shown when pinned. No transition. */
+  .pin-btn {
+    flex-shrink: 0;
+    margin: 0 0 0 auto;
+    padding: 1px;
+    border: 0;
+    background: none;
+    color: #8a8a8a;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    visibility: hidden;
+  }
+  .t:hover .pin-btn,
+  .t:focus-within .pin-btn,
+  .pin-btn.on {
+    visibility: visible;
+  }
+  .pin-btn.on {
+    color: var(--accent, #9a9a9a);
+  }
+  .pin-btn:hover {
+    color: #333;
   }
   .done .bx {
     background: var(--accent, #9a9a9a);

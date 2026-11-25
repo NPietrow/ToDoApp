@@ -13,8 +13,9 @@ import topBarSource from '../src/components/TopBar.svelte?raw'
 import * as api from '../src/lib/api'
 import { ApiError } from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
+import { ui } from '../src/lib/ui.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
-import { FakeResizeObserver, fixtureState, makeProject, makeTask, resetApp } from './fixtures'
+import { FakeResizeObserver, fixtureState, makeProject, makeTask, resetApp, TODAY } from './fixtures'
 
 class FakeEventSource {
   static last: FakeEventSource | null = null
@@ -206,6 +207,51 @@ describe('Grid', () => {
     expect(notes[0]).toHaveValue('line one\n<b>x</b>')
     expect(notes[1]).toHaveValue('')
     expect(container.querySelector('b')).toBeNull()
+  })
+})
+
+describe('Grid pin button', () => {
+  function card(title: string) {
+    return screen.getByText(title).closest('[data-task-id]') as HTMLElement
+  }
+  function mockWrites() {
+    vi.spyOn(api, 'getState').mockResolvedValue(fixtureState())
+    return vi.spyOn(api, 'patchTask').mockResolvedValue(makeTask({ id: 'x', title: 'x' }))
+  }
+
+  test("pin button pins with one click and doesn't open the pop-up", async () => {
+    ui.openTaskId = null
+    const patch = mockWrites()
+    render(Grid)
+    const c = card('Chase Sam re: sensor access')
+    await fireEvent.click(within(c).getByRole('button', { name: 'Add to today' }))
+    expect(patch).toHaveBeenCalledWith(c.getAttribute('data-task-id'), { planned_for: TODAY })
+    expect(ui.openTaskId).toBeNull()
+  })
+
+  test('pin button on a pinned task unpins', async () => {
+    ui.openTaskId = null
+    const patch = mockWrites()
+    render(Grid)
+    const c = card('Finish pilot interim report')
+    await fireEvent.click(within(c).getByRole('button', { name: 'Remove from today' }))
+    expect(patch).toHaveBeenCalledWith(c.getAttribute('data-task-id'), { planned_for: null })
+    expect(ui.openTaskId).toBeNull()
+  })
+
+  test('pin button never starts a drag', () => {
+    render(Grid)
+    const btn = within(card('Chase Sam re: sensor access')).getByRole('button', { name: 'Add to today' })
+    expect(btn).toHaveAttribute('draggable', 'false')
+    const ev = new Event('dragstart', { bubbles: true, cancelable: true })
+    btn.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  test('pinned card is still bold', () => {
+    render(Grid)
+    expect(card('Finish pilot interim report')).toHaveClass('pin')
+    expect(card('Chase Sam re: sensor access')).not.toHaveClass('pin')
   })
 })
 
