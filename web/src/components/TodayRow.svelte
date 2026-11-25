@@ -34,7 +34,7 @@
     ui.contextMenu = { x, y, kind: 'task', id: task.id }
   }
 
-  // Only the row itself drags; the tick box and × never start one.
+  // Only the row itself drags; the tick box and the x never start one.
   function dragStart(e: DragEvent) {
     if ((e.target as HTMLElement).closest('.bx, .x')) {
       e.preventDefault()
@@ -65,7 +65,7 @@
 <div class="row" class:done={task.status === 'done'} data-task-id={task.id} role="group"
   tabindex="0" style:--accent={colours?.accent} {onclick} {onkeydown}
   draggable={task.status === 'done' ? undefined : 'true'} ondragstart={dragStart}
-  ondragend={() => setTimeout(() => (dragged = false))}
+  ondragend={() => setTimeout(() => (dragged = false))} onpointerdown={() => (dragged = false)}
   oncontextmenu={(e) => {
     e.preventDefault()
     openMenu(e.clientX, e.clientY)

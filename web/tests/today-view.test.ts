@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import '@testing-library/svelte/vitest'
-import { render, screen, waitFor, within } from '@testing-library/svelte'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -323,6 +323,18 @@ describe('Today view', () => {
       const d = dt()
       const ev = fire(screen.getByRole('checkbox', { name: 'Alpha' }), 'dragstart', d)
       expect(ev.defaultPrevented).toBe(true)
+    })
+
+    test('a drag ending on its own row does not open the pop-up, and the next press does', async () => {
+      await renderToday(three())
+      const row = rowOf('Alpha')
+      const d = dt()
+      fire(row, 'dragstart', d)
+      // No dragend (Chromium may not send one): the click that ends the drag is swallowed.
+      await fireEvent.click(row)
+      expect(ui.openTaskId).toBeNull()
+      await user.click(row)
+      expect(ui.openTaskId).toBe('a')
     })
 
     test('reorder failure toasts and refreshes', async () => {
