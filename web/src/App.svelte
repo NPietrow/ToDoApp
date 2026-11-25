@@ -6,6 +6,7 @@
   import SettingsModal from './components/SettingsModal.svelte'
   import Toast from './components/Toast.svelte'
   import TaskModal from './components/TaskModal.svelte'
+  import TodayView from './components/TodayView.svelte'
   import TopBar from './components/TopBar.svelte'
   import UnsortedTray from './components/UnsortedTray.svelte'
   import { app, connectEvents, refresh, startDayWatch } from './lib/state.svelte'
@@ -39,7 +40,7 @@
   <div class="board" inert={app.serverStopped}>
     <div class="app">
       <TopBar />
-      <Grid />
+      {#if ui.view === 'today'}<TodayView />{:else}<Grid />{/if}
     </div>
     {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
     {#if ui.modal === 'paste'}<PasteTasksModal />

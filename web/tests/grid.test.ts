@@ -269,10 +269,12 @@ describe('App', () => {
 })
 
 describe('TopBar', () => {
-  test('Grid tab is active, later views are disabled', () => {
+  test('Grid tab is active, Today is enabled, later views are disabled', () => {
     render(TopBar)
     expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-current', 'page')
-    for (const name of ['Today', 'Kanban', 'Table', 'Stats']) {
+    expect(screen.getByRole('button', { name: 'Today' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Today' })).not.toHaveAttribute('aria-current')
+    for (const name of ['Kanban', 'Table', 'Stats']) {
       const b = screen.getByRole('button', { name })
       expect(b).toBeDisabled()
       expect(b).toHaveAttribute('title', 'Coming in a later stage')
