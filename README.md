@@ -19,7 +19,7 @@ I built this to replace a very useful OneNote notebook table that worked better 
 
 ## What it does today
 
-This is **stage 1** of the plan: the Grid view. It's complete and usable day to day.
+The **Grid** and **Today** views are built and usable day to day.
 
 - **Projects as columns**, each with its own pastel colour. Add, rename, reorder, recolour and close projects from the right-click menu on a project's name. Closed projects can be reopened from Settings.
 - **Task types as rows:** Urgent, Quick, General and Objectives, plus a free-text **Notes** box per project for meeting scribbles.
@@ -27,11 +27,15 @@ This is **stage 1** of the plan: the Grid view. It's complete and usable day to 
 - **Click a task** to open it and add a description, a due date (with a date picker), a status (Not started, In progress, Blocked, Done) or to move it.
 - **Drag and drop** tasks between cells, or right-click a task to move it, change its status or delete it (with Undo).
 - **Collapse** a project or a row you don't need right now; "Expand all" brings everything back.
+- **Today.** The **Today** tab is one calm list of the tasks you've picked for the day, under the date, with a **Done today** section at the bottom. Tick tasks there, drag a row (or press **Alt+Up/Down** on it) to reorder, and use **×** to take a task off today's list; that only unpins it, the task stays on the Grid.
+- **Plan today.** The **Plan today** button switches the Grid to picking mode: click a task card to add or remove it from today, then press **Done planning** (or **Esc**) to land on Today. Tick boxes still tick while you pick.
+- **Pin from the Grid.** Hover a card and click its pin to add it to today in one click. Pinned cards show in bold.
+- **Due dates you can spot.** Overdue dates are bold with an orange outline, dates due today are normal, and future dates are quiet grey text.
 - **Paste tasks** and the **inbox folder** for bulk import, with a preview before anything is added. Tasks for unknown projects go to **Unsorted**, so nothing is lost.
 - **Settings:** text size, data folder, start when you log in (Windows), reopen closed projects, empty the trash.
 - **Live updates.** Edit a task file in another program, or drop one in the inbox, and the board updates by itself.
 
-The **Today, Kanban, Table and Stats** buttons in the top bar are placeholders for later stages and are greyed out for now.
+The **Kanban, Table and Stats** buttons in the top bar are placeholders for later stages and are greyed out for now.
 
 ## Getting started
 
@@ -106,6 +110,7 @@ Your browser opens at <http://127.0.0.1:8765/>. Stop it with **Ctrl+C** in the t
    <img src="docs/images/task-details.png" alt="A task opened to show its project, task type, status, due date and description" width="560">
 
 5. **Keep notes** in each project's Notes box. It saves as you type.
+6. **Plan your day.** Click **Plan today**, click the tasks you want to do today, then **Done planning**. The **Today** tab shows just those, in the order you choose.
 
 ### Getting tasks in from an AI assistant
 
@@ -127,6 +132,7 @@ Everything is plain files you can back up, sync or inspect.
 | Tasks | `tasks/`: one JSON file per task |
 | Projects | `projects.json` |
 | Notes | `notes/<project id>.txt`: plain text |
+| Planning log | `log/planning.json`: the days you used Plan today |
 | Inbox | `inbox/`: drop task files here; imported files move to `inbox/processed/` |
 | Deleted tasks | `.trash/tasks/`, until you empty the trash in Settings |
 | **Settings** | Windows: `%LOCALAPPDATA%\ToDoApp\settings.json` · macOS: `~/Library/Application Support/ToDoApp/settings.json` · Linux: `~/.config/ToDoApp/settings.json` |
@@ -201,7 +207,7 @@ npm --prefix web run build                 # build the UI (needed by the next li
 npm --prefix web run e2e                   # end-to-end tests on Edge, own server on port 8799
 ```
 
-Later stages are planned to add the Today, Kanban, Table and Stats views. The code was written with Claude Code, from a design and decisions made by the author.
+Later stages are planned to add the Kanban, Table and Stats views. The code was written with Claude Code, from a design and decisions made by the author.
 
 ## Licence
 
