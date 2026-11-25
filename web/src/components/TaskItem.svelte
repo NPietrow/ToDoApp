@@ -3,26 +3,17 @@
   // the pop-up (a link inside it is followed instead). Right-click, Shift+F10 and the ContextMenu key open its menu
   // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
   // --accent custom property.
-  import { setDone } from '../lib/api'
   import { formatDue, isToday } from '../lib/dates'
   import { deleteWithUndo } from '../lib/menus'
-  import { app, refresh } from '../lib/state.svelte'
-  import { showToast } from '../lib/toast.svelte'
+  import { app } from '../lib/state.svelte'
+  import { tickBox } from '../lib/tick.svelte'
   import type { Task } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
 
   let { task }: { task: Task } = $props()
 
-  // Ticking shows at once: `pending` holds the tick until the task itself changes (the
-  // refresh arrives) or the server refuses it.
-  let pending: boolean | null = $state(null)
-  const done = $derived(pending ?? task.status === 'done')
-
-  $effect(() => {
-    void task.status
-    void task.updated_at
-    pending = null
-  })
+  const tick = tickBox(() => task)
+  const done = $derived(tick.done)
 
   // A drag that ends over its own card must not also count as a click.
   let dragged = false
@@ -62,21 +53,6 @@
       openMenu(r.left + 16, r.top + r.height / 2)
     }
   }
-
-  async function toggle(e: MouseEvent) {
-    e.stopPropagation()
-    const next = !done
-    pending = next
-    try {
-      await setDone(task.id, next)
-    } catch (err) {
-      pending = null
-      const reason = err instanceof Error ? err.message : String(err)
-      showToast({ message: `Couldn't update task: ${reason}` })
-      return
-    }
-    void refresh()
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
@@ -89,7 +65,7 @@
   }}
 >
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
-    draggable="false" onclick={toggle}
+    draggable="false" onclick={tick.toggle}
   ></button>
   <span class="body">
     <span class="title">{task.title}</span>

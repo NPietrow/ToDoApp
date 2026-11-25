@@ -2,27 +2,18 @@
   // One row of the Today list: grip, tick box, title, due chip, task type, project chip and ×.
   // A click anywhere else on the row opens the pop-up; right-click, Shift+F10 and the ContextMenu
   // key open the task menu; Enter opens the task. × only unpins. Done rows have no grip or ×.
-  import { setDone } from '../lib/api'
   import { formatDue } from '../lib/dates'
   import { colourOf } from '../lib/palette'
-  import { app, refresh } from '../lib/state.svelte'
+  import { app } from '../lib/state.svelte'
   import { setPinned } from '../lib/today'
-  import { showToast } from '../lib/toast.svelte'
+  import { tickBox } from '../lib/tick.svelte'
   import { TASK_TYPES, type Task } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
 
   let { task }: { task: Task } = $props()
 
-  // Ticking shows at once: `pending` holds the tick until the task itself changes (the
-  // refresh arrives) or the server refuses it.
-  let pending: boolean | null = $state(null)
-  const done = $derived(pending ?? task.status === 'done')
-
-  $effect(() => {
-    void task.status
-    void task.updated_at
-    pending = null
-  })
+  const tick = tickBox(() => task)
+  const done = $derived(tick.done)
 
   // A closed project still names the chip; a missing one (none, or unknown) reads Unsorted.
   const project = $derived(app.projects.find((p) => p.id === task.project_id) ?? null)
@@ -49,21 +40,6 @@
       openMenu(r.left + 16, r.top + r.height / 2)
     }
   }
-
-  async function toggle(e: MouseEvent) {
-    e.stopPropagation()
-    const next = !done
-    pending = next
-    try {
-      await setDone(task.id, next)
-    } catch (err) {
-      pending = null
-      const reason = err instanceof Error ? err.message : String(err)
-      showToast({ message: `Couldn't update task: ${reason}` })
-      return
-    }
-    void refresh()
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the row is the keyboard target for Enter and the menu) -->
@@ -80,7 +56,7 @@
     <span class="grip" aria-hidden="true">⋮⋮</span>
   {/if}
   <button type="button" class="bx" class:on={done} role="checkbox" aria-checked={done}
-    aria-label={task.title} onclick={toggle}
+    aria-label={task.title} onclick={tick.toggle}
   ></button>
   <span class="title">{task.title}</span>
   {#if task.due_date}<span class="chip due">{formatDue(task.due_date, app.today)}</span>{/if}
