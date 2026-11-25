@@ -82,19 +82,25 @@ def test_quit_is_fast_with_open_event_stream(running_server):
     import httpx
 
     opened = threading.Event()
+    # Set if the stream never opened. An error after it opened is the shutdown cutting it off.
+    failed: list[BaseException] = []
 
     def hold_stream():
         try:
             with httpx.stream("GET", f"http://127.0.0.1:{running_server.port}/api/events", timeout=10) as r:
+                if r.status_code != 200:
+                    raise AssertionError(f"event stream answered {r.status_code}")
                 opened.set()
                 for _ in r.iter_raw():
                     pass
-        except httpx.HTTPError:
-            opened.set()
+        except (httpx.HTTPError, AssertionError) as err:
+            if not opened.is_set():
+                failed.append(err)
 
     client = threading.Thread(target=hold_stream, daemon=True)
     client.start()
-    assert opened.wait(5)
+    assert opened.wait(5), failed
+    assert not failed
     time.sleep(0.2)  # let the server register the stream
 
     started = time.monotonic()
