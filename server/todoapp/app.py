@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
@@ -57,6 +57,7 @@ def create_app(
     overrides: dict[str, object] | None = None,
     watch: bool = True,
     static_dir: Path | None = None,
+    on_show_window: Callable[[], None] | None = None,
 ) -> FastAPI:
     static_dir = STATIC_DIR if static_dir is None else static_dir
     ctx = AppContext(settings, runtime, config_path, overrides)
@@ -83,6 +84,13 @@ def create_app(
     app.include_router(events_api.router)
     for module in (tasks_api, projects_api, notes_api, intake_api, today_api):
         app.include_router(module.router)
+    if on_show_window is not None:  # the Windows exe only: a second launch hands its Open here
+
+        def _show_window() -> Response:
+            on_show_window()
+            return Response(status_code=204)
+
+        app.add_api_route("/api/window/show", _show_window, methods=["POST"], include_in_schema=False)
     @app.api_route(
         "/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False
     )

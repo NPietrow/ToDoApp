@@ -32,25 +32,39 @@ def _free_port() -> int:
 
 
 @pytest.fixture
-def running_server(tmp_path):
+def serve(tmp_path):
+    """Start the real app under uvicorn on a free port, in a background thread."""
+    running = []
+
+    def _serve(**app_options):
+        port = _free_port()
+        app = create_app(
+            AppSettings(data_dir=tmp_path / "data", port=port),
+            RuntimeOptions(),
+            config_path=tmp_path / "config" / "settings.json",
+            watch=False,
+            **app_options,
+        )
+        server = launcher_main.make_server(app, "127.0.0.1", port, log_config=None, log_level="warning")
+        thread = threading.Thread(target=server.run, daemon=True)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while not server.started and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert server.started
+        running.append((server, thread))
+        return SimpleNamespace(port=port, server=server, thread=thread)
+
+    yield _serve
+    for server, thread in running:
+        server.should_exit = True
+        thread.join(timeout=10)
+
+
+@pytest.fixture
+def running_server(serve):
     """The real app under uvicorn on a free port, in a background thread."""
-    port = _free_port()
-    app = create_app(
-        AppSettings(data_dir=tmp_path / "data", port=port),
-        RuntimeOptions(),
-        config_path=tmp_path / "config" / "settings.json",
-        watch=False,
-    )
-    server = launcher_main.make_server(app, "127.0.0.1", port, log_config=None, log_level="warning")
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.monotonic() + 10
-    while not server.started and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert server.started
-    yield SimpleNamespace(port=port, server=server, thread=thread)
-    server.should_exit = True
-    thread.join(timeout=10)
+    return serve()
 
 
 @pytest.fixture
@@ -188,6 +202,7 @@ def frozen(monkeypatch, tmp_path):
     monkeypatch.setattr(browser, "focus_existing_window", lambda title="ToDoApp": calls.append(("focus",)) or True)
     monkeypatch.setattr(browser, "open_app_window", lambda url, env=None: calls.append(("open", url)))
     monkeypatch.setattr(launcher_main, "message_box", lambda text: calls.append(("box", text)))
+    monkeypatch.setattr(single_instance, "request_show", lambda port, timeout=2.0: False)
     argv = ["--config", str(tmp_path / "config" / "settings.json"), "--data-dir", str(tmp_path / "data"), "--port", "8797"]
     return SimpleNamespace(calls=calls, argv=argv)
 
@@ -391,3 +406,56 @@ def test_open_retries_if_the_launched_window_never_appeared(opener):
     opener.clock.t += launcher_main.LAUNCH_GRACE_S + 0.1
     opener.shower.show()
     assert opener.calls == ["http://127.0.0.1:8797/"] * 2
+
+
+
+def test_launch_at_startup_skips_if_a_handed_over_show_already_opened_one(opener):
+    # A second exe launch can hand its Open to this instance before our own start-up launch.
+    opener.shower.show()
+    opener.clock.t += 0.2
+    opener.shower.launch()
+    assert opener.calls == ["http://127.0.0.1:8797/"]
+
+
+# --- a second exe launch hands Open to the running instance -------------------
+# Double-clicking the exe twice starts two processes. The second must not open a window itself:
+# it can't know the first one's window is still on its way.
+
+
+def test_second_launch_hands_open_to_the_running_instance(frozen, monkeypatch):
+    monkeypatch.setattr(single_instance, "probe", lambda port, timeout=1.0: "ours")
+    monkeypatch.setattr(
+        single_instance, "request_show", lambda port, timeout=2.0: frozen.calls.append(("ask", port)) or True
+    )
+    assert launcher_main.main(frozen.argv) == 0
+    assert frozen.calls == [("ask", 8797)]  # no local focus or open
+
+
+def test_request_show_runs_the_running_instance_open(serve):
+    shown = []
+    srv = serve(on_show_window=lambda: shown.append(True))
+    assert single_instance.request_show(srv.port) is True
+    assert shown == [True]
+
+
+def test_request_show_is_false_when_the_instance_cannot_show(running_server):
+    # Run from source or in Docker there is no window to show: the route doesn't exist.
+    assert single_instance.request_show(running_server.port) is False
+
+
+def test_request_show_is_false_when_nothing_is_listening():
+    assert single_instance.request_show(_free_port(), timeout=0.5) is False
+
+
+def test_show_window_route_refuses_other_origins(serve):
+    import http.client
+
+    shown = []
+    srv = serve(on_show_window=lambda: shown.append(True))
+    conn = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=2)
+    try:
+        conn.request("POST", "/api/window/show", headers={"Origin": "http://evil.example"})
+        assert conn.getresponse().status == 403
+    finally:
+        conn.close()
+    assert shown == []

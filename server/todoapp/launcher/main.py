@@ -115,9 +115,16 @@ def _show_window(url: str) -> None:
         browser.open_app_window(url)
 
 
+def _hand_over_show(port: int, url: str) -> None:
+    """A second launch: ask the running instance to show its window, so its guard against two
+    windows applies. If it can't (an older version, or it is busy), show one from here."""
+    if not single_instance.request_show(port):
+        _show_window(url)
+
+
 # Edge/Chrome take a moment to draw a new --app window. For this long after starting one, Open
-# only tries to focus it, so a tray double-click (pystray runs Open on every button release) or a
-# click straight after start-up can't open a second window.
+# only tries to focus it, so a tray double-click (pystray runs Open on every button release), a
+# click straight after start-up or a second exe launch (handed over here) can't open a second one.
 LAUNCH_GRACE_S = 5.0
 
 
@@ -131,17 +138,21 @@ class WindowShower:
         self._lock = threading.Lock()
 
     def launch(self) -> None:
+        """The start-up window. Skipped if a handed-over Open already started one."""
         with self._lock:
-            self._launch()
+            if not self._launching():
+                self._launch()
 
     def show(self) -> None:
         with self._lock:
             if browser.focus_existing_window():
                 self._launched_at = None  # the window is up: a later Open after closing it opens at once
                 return
-            if self._launched_at is not None and self._now() - self._launched_at < LAUNCH_GRACE_S:
-                return
-            self._launch()
+            if not self._launching():
+                self._launch()
+
+    def _launching(self) -> bool:
+        return self._launched_at is not None and self._now() - self._launched_at < LAUNCH_GRACE_S
 
     def _launch(self) -> None:
         browser.open_app_window(self._url)
@@ -252,7 +263,7 @@ def _run_windows_app(
     state = single_instance.probe(port)
     if state == "ours":
         if not args.no_browser:
-            _show_window(url)
+            _hand_over_show(port, url)
         return 0
     if state == "other":
         message_box(PORT_IN_USE.format(port=port))
@@ -261,7 +272,8 @@ def _run_windows_app(
     from . import tray
 
     log_config, log_file = _log_config()
-    app = create_app(base, runtime, config_path, overrides)
+    shower = WindowShower(url)
+    app = create_app(base, runtime, config_path, overrides, on_show_window=shower.show)
     server = make_server(app, runtime.bind_host, port, log_config=log_config, use_colors=False)
     thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
     thread.start()
@@ -269,13 +281,12 @@ def _run_windows_app(
         server.should_exit = True
         if single_instance.probe(port) == "ours":  # another launch got there first
             if not args.no_browser:
-                _show_window(url)
+                _hand_over_show(port, url)
             return 0
         where = f" Details are in {log_file}." if log_file else ""
         message_box(f"ToDoApp couldn't start on port {port}.{where}")
         return 1
 
-    shower = WindowShower(url)
     if not args.no_browser:
         shower.launch()
 
