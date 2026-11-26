@@ -91,6 +91,13 @@ export const moveTask = (id: string, projectId: string | null, taskType: TaskTyp
     index,
   })
 
+/** Put `ids` first, in that order, on `date`'s Today list. Resolves to the day's open tasks. */
+export const reorderToday = (date: string, ids: string[]) =>
+  request<Task[]>('POST', '/api/today/reorder', { date, ids })
+
+/** Record that `date` was planned (Plan today). Resolves to every planned day, oldest first. */
+export const logPlanning = (date: string) => request<{ dates: string[] }>('POST', '/api/planning', { date })
+
 export const deleteTask = (id: string) => request<void>('DELETE', `/api/tasks/${enc(id)}`)
 
 export const restoreTask = (id: string) => request<Task>('POST', `/api/tasks/${enc(id)}/restore`)

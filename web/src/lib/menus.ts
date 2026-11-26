@@ -13,6 +13,7 @@ import { isToday } from './dates'
 import { PALETTE } from './palette'
 import { refresh } from './state.svelte'
 import { showToast } from './toast.svelte'
+import { setPinned } from './today'
 import { STATUS_LABELS, TASK_TYPES, type Project, type Status, type Task, type TaskType } from './types'
 
 export type MenuItem = {
@@ -99,12 +100,11 @@ export function taskMenuItems(task: Task, ctx: TaskMenuContext): MenuItem[] {
     today
       ? {
           label: 'Remove from today',
-          action: () => void attempt('update task', () => patchTask(task.id, { planned_for: null })),
+          action: () => void setPinned(task, false, ctx.today),
         }
       : {
           label: 'Add to today',
-          action: () =>
-            void attempt('update task', () => patchTask(task.id, { planned_for: ctx.today })),
+          action: () => void setPinned(task, true, ctx.today),
         },
     {
       label: 'Set status ▸',

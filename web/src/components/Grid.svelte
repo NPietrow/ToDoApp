@@ -147,7 +147,9 @@
   </div></div>
 {/if}
 
-{#if ui.contextMenu && menu}
+<!-- Only on its own view: while Today shows, the Grid is hidden but still mounted, and Today
+     shows its own menu. -->
+{#if ui.view === 'grid' && ui.contextMenu && menu}
   {#key ui.contextMenu}
     <ContextMenu items={menu.items} x={ui.contextMenu.x} y={ui.contextMenu.y}
       onclose={() => (ui.contextMenu = null)} />

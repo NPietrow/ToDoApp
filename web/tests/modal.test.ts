@@ -11,6 +11,7 @@ import * as api from '../src/lib/api'
 import { dialogFocus } from '../src/lib/dialog'
 import { app } from '../src/lib/state.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
+import { todayWrites } from '../src/lib/today'
 import type { Task } from '../src/lib/types'
 import { ui } from '../src/lib/ui.svelte'
 import { fixtureState, makeTask, resetApp, TASK, TODAY } from './fixtures'
@@ -92,6 +93,29 @@ describe('task modal', () => {
     await waitFor(() => expect(toggle).toBeChecked())
     await user.click(toggle)
     expect(patch).toHaveBeenLastCalledWith(TASK.id, { planned_for: null })
+  })
+
+  test('today toggle waits its turn behind earlier Today writes', async () => {
+    setup()
+    let release!: () => void
+    const earlier = todayWrites(() => new Promise<void>((r) => (release = r)))
+    render(TaskModal)
+    await user.click(screen.getByLabelText("On today's list"))
+    const sentEarly = patch.mock.calls.length
+    release()
+    await earlier
+    expect(sentEarly).toBe(0)
+    await waitFor(() => expect(patch).toHaveBeenCalledWith(TASK.id, { planned_for: TODAY }))
+  })
+
+  test('a failed today toggle toasts and flips back', async () => {
+    setup()
+    patch.mockRejectedValue(new api.ApiError(500, 'disk full'))
+    render(TaskModal)
+    const toggle = screen.getByLabelText("On today's list")
+    await user.click(toggle)
+    await waitFor(() => expect(toast.current?.message).toBe("Couldn't update task: disk full"))
+    await waitFor(() => expect(toggle).not.toBeChecked())
   })
 
   test('Blocked segment saves status; Task type segment saves task_type', async () => {

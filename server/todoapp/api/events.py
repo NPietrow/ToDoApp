@@ -8,6 +8,8 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from ..events import SHUTDOWN
+
 router = APIRouter(prefix="/api")
 
 HEARTBEAT_S = 15.0
@@ -22,12 +24,14 @@ async def events(request: Request) -> StreamingResponse:
 
     async def stream() -> AsyncIterator[str]:
         try:
-            while True:
+            while not bus.closed:
                 try:
-                    await asyncio.wait_for(q.get(), HEARTBEAT_S)
+                    kind = await asyncio.wait_for(q.get(), HEARTBEAT_S)
                 except TimeoutError:
                     yield ": ping\n\n"
                 else:
+                    if kind == SHUTDOWN:
+                        return
                     yield "event: changed\ndata: {}\n\n"
         finally:
             bus.unsubscribe(q)

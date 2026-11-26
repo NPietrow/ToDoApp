@@ -2,10 +2,12 @@
   import { onMount } from 'svelte'
   import Grid from './components/Grid.svelte'
   import PasteTasksModal from './components/PasteTasksModal.svelte'
+  import PickingBanner from './components/PickingBanner.svelte'
   import ProblemsList from './components/ProblemsList.svelte'
   import SettingsModal from './components/SettingsModal.svelte'
   import Toast from './components/Toast.svelte'
   import TaskModal from './components/TaskModal.svelte'
+  import TodayView from './components/TodayView.svelte'
   import TopBar from './components/TopBar.svelte'
   import UnsortedTray from './components/UnsortedTray.svelte'
   import { app, connectEvents, refresh, startDayWatch } from './lib/state.svelte'
@@ -25,6 +27,17 @@
     }
   })
 
+  let gridView: HTMLElement | undefined = $state()
+
+  // A Grid control that had focus as the Grid was hidden (Escape out of picking, say) must not
+  // keep it: keys pressed afterwards would still reach the hidden card. Browsers usually drop
+  // that focus themselves, but not always at once.
+  $effect(() => {
+    if (ui.view === 'grid' || !gridView) return
+    const at = document.activeElement
+    if (at instanceof HTMLElement && gridView.contains(at)) at.blur()
+  })
+
   $effect(() => {
     document.documentElement.style.setProperty(
       '--base-size',
@@ -39,7 +52,11 @@
   <div class="board" inert={app.serverStopped}>
     <div class="app">
       <TopBar />
-      <Grid />
+      {#if ui.picking}<PickingBanner />{/if}
+      <!-- The Grid stays mounted under Today, only hidden, so half-typed "+ add" text survives a
+           trip there. Hidden means not shown, not focusable and not announced. -->
+      <div class="grid-view" hidden={ui.view !== 'grid'} bind:this={gridView}><Grid /></div>
+      {#if ui.view === 'today'}<TodayView />{/if}
     </div>
     {#if ui.openTaskId}{#key ui.openTaskId}<TaskModal />{/key}{/if}
     {#if ui.modal === 'paste'}<PasteTasksModal />

@@ -11,6 +11,7 @@ from .events import EventBus
 from .inbox import process_inbox
 from .models import Project, utcnow
 from .store.notes import NotesRepository
+from .store.planning import PlanningLog
 from .store.projects import ProjectRepository
 from .store.tasks import FileProblem, TaskRepository
 from .watcher import DataWatcher
@@ -88,6 +89,7 @@ class AppContext:
         self.tasks = TaskRepository(d)
         self.projects = GuardedProjectRepository(d)
         self.notes = NotesRepository(d)
+        self.planning = PlanningLog(d)
 
     def read_projects(self) -> tuple[list[Project], FileProblem | None]:
         """All projects, or ([], problem) if projects.json is unreadable."""

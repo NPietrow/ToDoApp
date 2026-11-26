@@ -13,8 +13,9 @@ import topBarSource from '../src/components/TopBar.svelte?raw'
 import * as api from '../src/lib/api'
 import { ApiError } from '../src/lib/api'
 import { app } from '../src/lib/state.svelte'
+import { ui } from '../src/lib/ui.svelte'
 import { clearToast, toast } from '../src/lib/toast.svelte'
-import { FakeResizeObserver, fixtureState, makeProject, makeTask, resetApp } from './fixtures'
+import { FakeResizeObserver, fixtureState, makeProject, makeTask, resetApp, TODAY } from './fixtures'
 
 class FakeEventSource {
   static last: FakeEventSource | null = null
@@ -209,6 +210,83 @@ describe('Grid', () => {
   })
 })
 
+describe('Grid due chip state', () => {
+  const chipOf = (title: string) =>
+    screen.getByText(title).closest('[data-task-id]')!.querySelector<HTMLElement>('.due')!
+
+  test('overdue due chip is marked overdue', () => {
+    app.tasks.push(makeTask({ id: 'o1', title: 'Late one', due_date: '2026-11-12' }))
+    render(Grid)
+    expect(chipOf('Late one')).toHaveAttribute('data-due', 'overdue')
+    expect(chipOf('Late one')).toHaveTextContent('Thu 12 Nov')
+  })
+
+  test('future due chip is quiet', () => {
+    app.tasks.push(makeTask({ id: 'f1', title: 'Later one', due_date: '2026-11-20' }))
+    render(Grid)
+    expect(chipOf('Later one')).toHaveAttribute('data-due', 'future')
+  })
+
+  test('due today chip is marked today', () => {
+    app.tasks.push(makeTask({ id: 'n1', title: 'Now one', due_date: TODAY }))
+    render(Grid)
+    expect(chipOf('Now one')).toHaveAttribute('data-due', 'today')
+  })
+
+  test("done task's chip is never overdue", () => {
+    app.tasks.push(
+      makeTask({ id: 'd1', title: 'Finished late', due_date: '2026-11-01', status: 'done', completed_at: new Date(2026, 10, 13, 9, 0).toISOString() }),
+    )
+    render(Grid)
+    expect(chipOf('Finished late')).toHaveAttribute('data-due', 'future')
+  })
+})
+
+describe('Grid pin button', () => {
+  function card(title: string) {
+    return screen.getByText(title).closest('[data-task-id]') as HTMLElement
+  }
+  function mockWrites() {
+    vi.spyOn(api, 'getState').mockResolvedValue(fixtureState())
+    return vi.spyOn(api, 'patchTask').mockResolvedValue(makeTask({ id: 'x', title: 'x' }))
+  }
+
+  test("pin button pins with one click and doesn't open the pop-up", async () => {
+    ui.openTaskId = null
+    const patch = mockWrites()
+    render(Grid)
+    const c = card('Chase Sam re: sensor access')
+    await fireEvent.click(within(c).getByRole('button', { name: 'Add to today' }))
+    expect(patch).toHaveBeenCalledWith(c.getAttribute('data-task-id'), { planned_for: TODAY })
+    expect(ui.openTaskId).toBeNull()
+  })
+
+  test('pin button on a pinned task unpins', async () => {
+    ui.openTaskId = null
+    const patch = mockWrites()
+    render(Grid)
+    const c = card('Finish pilot interim report')
+    await fireEvent.click(within(c).getByRole('button', { name: 'Remove from today' }))
+    expect(patch).toHaveBeenCalledWith(c.getAttribute('data-task-id'), { planned_for: null })
+    expect(ui.openTaskId).toBeNull()
+  })
+
+  test('pin button never starts a drag', () => {
+    render(Grid)
+    const btn = within(card('Chase Sam re: sensor access')).getByRole('button', { name: 'Add to today' })
+    expect(btn).toHaveAttribute('draggable', 'false')
+    const ev = new Event('dragstart', { bubbles: true, cancelable: true })
+    btn.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  test('pinned card is still bold', () => {
+    render(Grid)
+    expect(card('Finish pilot interim report')).toHaveClass('pin')
+    expect(card('Chase Sam re: sensor access')).not.toHaveClass('pin')
+  })
+})
+
 describe('App', () => {
   test('empty state when no active projects', () => {
     stubAppNetwork({ ...fixtureState(), projects: [] })
@@ -269,10 +347,12 @@ describe('App', () => {
 })
 
 describe('TopBar', () => {
-  test('Grid tab is active, later views are disabled', () => {
+  test('Grid tab is active, Today is enabled, later views are disabled', () => {
     render(TopBar)
     expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-current', 'page')
-    for (const name of ['Today', 'Kanban', 'Table', 'Stats']) {
+    expect(screen.getByRole('button', { name: 'Today' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Today' })).not.toHaveAttribute('aria-current')
+    for (const name of ['Kanban', 'Table', 'Stats']) {
       const b = screen.getByRole('button', { name })
       expect(b).toBeDisabled()
       expect(b).toHaveAttribute('title', 'Coming in a later stage')

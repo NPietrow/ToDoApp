@@ -332,3 +332,128 @@ def test_partial_files_are_left_alone_while_projects_are_unreadable(tmp_path):
     assert sorted((t.title, t.project_id) for t in res.tasks) == [
         ("Complete one", proj.id), ("Hand edited", proj.id)
     ] and res.problems == []
+
+
+# -- Today ordering ---------------------------------------------------------
+D = date(2026, 11, 25)
+
+
+def _pin(r, title):
+    t = r.create(title, None)
+    return r.update(t.id, TaskChanges(planned_for=D))
+
+
+def test_pin_goes_to_bottom(tmp_path):
+    r = TaskRepository(tmp_path)
+    a, b, c = (_pin(r, n) for n in "abc")
+    assert (a.today_order, b.today_order, c.today_order) == (0, 1, 2)
+
+
+def test_unpin_clears_today_order(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a")
+    assert r.update(a.id, TaskChanges(planned_for=None)).today_order is None
+
+
+def test_repin_goes_to_bottom(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a"); b = _pin(r, "b")
+    r.update(a.id, TaskChanges(planned_for=None))
+    r.update(a.id, TaskChanges(planned_for=D))
+    assert (r.get(a.id).today_order, r.get(b.id).today_order) == (2, 1)
+
+
+def test_other_edits_keep_today_order(tmp_path):
+    r = TaskRepository(tmp_path)
+    _pin(r, "x"); a = _pin(r, "a")
+    assert r.update(a.id, TaskChanges(title="renamed")).today_order == 1
+
+
+def test_add_with_planned_for_and_no_today_order_goes_to_bottom(tmp_path):
+    r = TaskRepository(tmp_path)
+    _pin(r, "a")
+    base = r.create("n", None)
+    new = r.add(base.model_copy(update={"id": new_id(), "planned_for": D, "today_order": None}))
+    assert new.today_order == 1
+
+
+def test_reorder_today_sets_listed_then_keeps_unlisted_after(tmp_path):
+    r = TaskRepository(tmp_path)
+    a, b, c = (_pin(r, n) for n in "abc")
+    out = r.reorder_today(D, [c.id, a.id])
+    assert [t.id for t in out] == [c.id, a.id, b.id]
+    assert [r.get(t.id).today_order for t in (c, a, b)] == [0, 1, 2]
+
+
+def test_reorder_rejects_task_not_pinned_to_that_day_and_writes_nothing(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a"); b = _pin(r, "b"); x = r.create("x", None)
+    with pytest.raises(ValueError):
+        r.reorder_today(D, [b.id, x.id])
+    assert (r.get(a.id).today_order, r.get(b.id).today_order) == (0, 1)
+    done = r.set_done(a.id, True)
+    with pytest.raises(ValueError):
+        r.reorder_today(D, [b.id, done.id])
+    assert r.get(b.id).today_order == 1
+
+
+def test_reorder_rejects_duplicate_ids(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a")
+    with pytest.raises(ValueError):
+        r.reorder_today(D, [a.id, a.id])
+
+
+def test_restore_keeps_today_fields(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a")
+    r.delete(a.id)
+    back = r.restore(a.id)
+    assert (back.planned_for, back.today_order) == (D, 0)
+
+
+def _pin_unordered(r, title, created):
+    """A task pinned to D with no today_order, as stage 1 or a hand edit leaves it."""
+    t = r.create(title, None)
+    t = t.model_copy(update={"planned_for": D, "today_order": None, "created_at": created})
+    r._write(t)
+    return t
+
+
+def test_new_pin_goes_below_pins_with_no_today_order(tmp_path):
+    r = TaskRepository(tmp_path)
+    old = _pin_unordered(r, "old", datetime(2026, 11, 1, 9, 0, tzinfo=UTC))
+    new = _pin(r, "new")
+    assert r.get(old.id).today_order == 0
+    assert new.today_order == 1
+
+
+def test_new_pin_numbers_the_day_in_the_clients_order_first(tmp_path):
+    r = TaskRepository(tmp_path)
+    ordered = _pin(r, "ordered")  # today_order 0
+    done = _pin(r, "done")  # today_order 1
+    r.set_done(done.id, True)
+    later = _pin_unordered(r, "later", datetime(2026, 11, 2, 9, 0, tzinfo=UTC))
+    earlier = _pin_unordered(r, "earlier", datetime(2026, 11, 1, 9, 0, tzinfo=UTC))
+    new = _pin(r, "new")
+    # today_order first (unset last), then created_at: done tasks are left out.
+    got = [r.get(t.id).today_order for t in (ordered, earlier, later)]
+    assert got == [0, 1, 2]
+    assert new.today_order == 3
+
+
+def test_add_with_planned_for_goes_below_pins_with_no_today_order(tmp_path):
+    r = TaskRepository(tmp_path)
+    old = _pin_unordered(r, "old", datetime(2026, 11, 1, 9, 0, tzinfo=UTC))
+    base = r.create("n", None)
+    new = r.add(base.model_copy(update={"id": new_id(), "planned_for": D, "today_order": None}))
+    assert (r.get(old.id).today_order, new.today_order) == (0, 1)
+
+
+def test_reorder_today_breaks_ties_like_the_client(tmp_path):
+    r = TaskRepository(tmp_path)
+    a = _pin(r, "a")
+    later = _pin_unordered(r, "later", datetime(2026, 11, 2, 9, 0, tzinfo=UTC))
+    earlier = _pin_unordered(r, "earlier", datetime(2026, 11, 1, 9, 0, tzinfo=UTC))
+    out = r.reorder_today(D, [a.id])
+    assert [t.id for t in out] == [a.id, earlier.id, later.id]

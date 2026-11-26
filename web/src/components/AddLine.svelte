@@ -4,6 +4,7 @@
   // once, and the text only comes back if the server refuses it.
   import { tick } from 'svelte'
   import { createTask } from '../lib/api'
+  import { serial } from '../lib/serial'
   import { plainPaste } from '../lib/paste'
   import { refresh } from '../lib/state.svelte'
   import { showToast } from '../lib/toast.svelte'
@@ -11,6 +12,9 @@
   import type { TaskType } from '../lib/types'
 
   let { projectId, taskType }: { projectId: string; taskType: TaskType } = $props()
+
+  // Creates go to the server one at a time, so rapid Enters land in typed order.
+  const writes = serial()
 
   let open = $state(false)
   let value = $state('')
@@ -32,7 +36,7 @@
     if (!title) return
     value = ''
     try {
-      await createTask(title, projectId, taskType)
+      await writes(() => createTask(title, projectId, taskType))
       void refresh()
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err)

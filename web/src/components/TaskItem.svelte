@@ -2,39 +2,41 @@
   // One task card in a Grid cell. The tick box ticks; a click anywhere else on the card opens
   // the pop-up (a link inside it is followed instead). Right-click, Shift+F10 and the ContextMenu key open its menu
   // (shown by the Grid); Enter opens the task and Delete deletes it. The project's accent comes from the enclosing cell's
-  // --accent custom property.
-  import { setDone } from '../lib/api'
-  import { formatDue, isToday } from '../lib/dates'
+  // --accent custom property. In picking mode a click (or Enter) anywhere but the tick box pins or
+  // unpins the card instead, and dragging, the menu and Delete are off.
+  import { isToday } from '../lib/dates'
+  import DueChip from './DueChip.svelte'
   import { deleteWithUndo } from '../lib/menus'
-  import { app, refresh } from '../lib/state.svelte'
-  import { showToast } from '../lib/toast.svelte'
+  import { app } from '../lib/state.svelte'
+  import { tickBox } from '../lib/tick.svelte'
+  import { setPinned } from '../lib/today'
   import type { Task } from '../lib/types'
   import { ui } from '../lib/ui.svelte'
+  import PinIcon from './PinIcon.svelte'
 
   let { task }: { task: Task } = $props()
 
-  // Ticking shows at once: `pending` holds the tick until the task itself changes (the
-  // refresh arrives) or the server refuses it.
-  let pending: boolean | null = $state(null)
-  const done = $derived(pending ?? task.status === 'done')
+  const tick = tickBox(() => task)
+  const done = $derived(tick.done)
+  const pinned = $derived(isToday(task, app.today))
 
-  $effect(() => {
-    void task.status
-    void task.updated_at
-    pending = null
-  })
-
-  // A drag that ends over its own card must not also count as a click.
+  // A drag that ends over its own card must not also count as a click. A drag the browser
+  // dropped without a dragend is forgotten at the next press.
   let dragged = false
 
+  function togglePin() {
+    void setPinned(task, !pinned, app.today)
+  }
+
   function onclick(e: MouseEvent) {
-    if (dragged || (e.target as HTMLElement).closest('a, .bx')) return
-    ui.openTaskId = task.id
+    if (dragged || (e.target as HTMLElement).closest('a, .bx, .pin-btn')) return
+    if (ui.picking) togglePin()
+    else ui.openTaskId = task.id
   }
 
   function dragStart(e: DragEvent) {
-    // Only the card itself drags; the tick box (and anything inside the card) never starts one.
-    if ((e.target as HTMLElement).closest('.bx')) {
+    // Only the card itself drags; the tick box and pin button (and anything inside the card) never starts one.
+    if ((e.target as HTMLElement).closest('.bx, .pin-btn')) {
       e.preventDefault()
       return
     }
@@ -50,6 +52,13 @@
   function onkeydown(e: KeyboardEvent) {
     // Only keys pressed on the card itself, never on the tick box.
     if (e.target !== e.currentTarget) return
+    if (ui.picking) {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        togglePin()
+      }
+      return
+    }
     if (e.key === 'Enter') {
       e.preventDefault()
       ui.openTaskId = task.id
@@ -62,41 +71,33 @@
       openMenu(r.left + 16, r.top + r.height / 2)
     }
   }
-
-  async function toggle(e: MouseEvent) {
-    e.stopPropagation()
-    const next = !done
-    pending = next
-    try {
-      await setDone(task.id, next)
-    } catch (err) {
-      pending = null
-      const reason = err instanceof Error ? err.message : String(err)
-      showToast({ message: `Couldn't update task: ${reason}` })
-      return
-    }
-    void refresh()
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (the card is the keyboard target for Enter, Delete and the menu) -->
-<div class="t" class:pin={isToday(task, app.today)} class:done data-task-id={task.id}
-  draggable="true" ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))}
+<div class="t" class:pin={pinned} class:done class:picking={ui.picking} class:picked={ui.picking && pinned && !done}
+  data-task-id={task.id} draggable={!ui.picking} ondragstart={dragStart} ondragend={() => setTimeout(() => (dragged = false))} onpointerdown={() => (dragged = false)}
   {onclick} role="group" tabindex="0" {onkeydown}
   oncontextmenu={(e) => {
     e.preventDefault()
-    openMenu(e.clientX, e.clientY)
+    if (!ui.picking) openMenu(e.clientX, e.clientY)
   }}
 >
   <button type="button" class="bx" role="checkbox" aria-checked={done} aria-label={task.title}
-    draggable="false" onclick={toggle}
+    draggable="false" onclick={tick.toggle}
   ></button>
   <span class="body">
     <span class="title">{task.title}</span>
-    {#if task.due_date}<span class="chip due">{formatDue(task.due_date, app.today)}</span>{/if}
+    {#if task.due_date}<DueChip due={task.due_date} done={task.status === 'done'} />{/if}
     {#if task.status === 'blocked'}<span class="chip blk">Blocked</span>{/if}
     {#if task.description}<span class="desc" role="img" aria-label="has description">≡</span>{/if}
   </span>
+  <button type="button" class="pin-btn" class:on={pinned} draggable="false"
+    aria-label={pinned ? 'Remove from today' : 'Add to today'}
+    onclick={(e) => {
+      e.stopPropagation()
+      togglePin()
+    }}
+  ><PinIcon filled={pinned} /></button>
 </div>
 
 <style>
@@ -147,6 +148,46 @@
     background: #fff;
     cursor: pointer;
   }
+  /* Revealed instantly on hover or keyboard focus; always shown when pinned. No transition. */
+  .pin-btn {
+    flex-shrink: 0;
+    margin: 0 0 0 auto;
+    padding: 1px;
+    border: 0;
+    background: none;
+    color: #8a8a8a;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    visibility: hidden;
+  }
+  .t:hover .pin-btn,
+  .t:focus-within .pin-btn,
+  .pin-btn.on {
+    visibility: visible;
+  }
+  .pin-btn.on {
+    color: var(--accent, #9a9a9a);
+  }
+  .pin-btn:hover {
+    color: #333;
+  }
+  /* Picking mode: every card shows its pin, faint until picked; picked cards get a dark ring
+     (also on hover, which would otherwise swap in the accent ring). */
+  .picking .pin-btn {
+    visibility: visible;
+    color: #c4c4c4;
+  }
+  .picking .pin-btn.on,
+  .picking .pin-btn:hover {
+    color: var(--text);
+  }
+  .t.picked,
+  .t.picked:hover {
+    box-shadow:
+      0 0 0 1.5px var(--text),
+      0 1px 2px rgba(0, 0, 0, 0.06);
+  }
   .done .bx {
     background: var(--accent, #9a9a9a);
   }
@@ -157,9 +198,8 @@
     font-size: 0.84em;
     white-space: nowrap;
   }
-  .due {
-    color: var(--due-fg);
-    background: var(--due-bg);
+  .body :global(.due) {
+    margin-left: 4px;
   }
   .blk {
     color: var(--blocked-fg);

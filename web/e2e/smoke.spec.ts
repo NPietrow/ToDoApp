@@ -125,3 +125,55 @@ test("a file dropped in inbox appears live", async ({ page, request }) => {
   fs.renameSync(tmp, path.join(inbox, "x.json")); // appears whole, never half-written
   await expect(page.getByText("Dropped in by file")).toBeVisible({ timeout: 5000 });
 });
+
+test("plan today, then work from Today", async ({ page, request }) => {
+  const p = await makeProject(request, "Plan Project");
+  for (const title of ["Plan alpha", "Plan bravo", "Plan charlie"]) await makeTask(request, title, p.id, "quick");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Plan today" }).click();
+  await page.locator("[data-task-id]").filter({ hasText: "Plan alpha" }).getByText("Plan alpha").click();
+  await page.locator("[data-task-id]").filter({ hasText: "Plan bravo" }).getByText("Plan bravo").click();
+  await expect(page.locator(".text").filter({ hasText: "Picking for today" })).toContainText("2 picked");
+  await page.getByRole("button", { name: "Done planning" }).click();
+
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  const rows = page.locator("ul[aria-label='Today'] [data-task-id]");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Plan alpha");
+  await expect(rows.nth(1)).toContainText("Plan bravo");
+
+  await rows.nth(0).focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(rows.nth(0)).toContainText("Plan bravo");
+  await expect(rows.nth(1)).toContainText("Plan alpha");
+
+  await rows.nth(0).getByRole("checkbox").click();
+  const done = page.getByRole("region", { name: "Done today" });
+  await expect(done).toContainText("Plan bravo");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.nth(0)).toContainText("Plan alpha");
+  await expect(page.getByRole("region", { name: "Done today" })).toContainText("Plan bravo");
+
+  const today = await page.evaluate(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const log = fs.readFileSync(path.join(DATA_DIR, "log", "planning.json"), "utf-8");
+  expect(log).toContain(today);
+});
+
+test("grid pin shows on Today", async ({ page, request }) => {
+  const p = await makeProject(request, "Pin Project");
+  await makeTask(request, "Pin me", p.id, "quick");
+  await page.goto("/");
+  const card = page.locator("[data-task-id]").filter({ hasText: "Pin me" });
+  await card.hover();
+  await card.getByRole("button", { name: "Add to today" }).click();
+  await expect(card.getByRole("button", { name: "Remove from today" })).toBeAttached();
+  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await expect(page.locator("ul[aria-label='Today'] [data-task-id]").filter({ hasText: "Pin me" })).toBeVisible();
+});
