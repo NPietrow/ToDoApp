@@ -115,6 +115,39 @@ def _show_window(url: str) -> None:
         browser.open_app_window(url)
 
 
+# Edge/Chrome take a moment to draw a new --app window. For this long after starting one, Open
+# only tries to focus it, so a tray double-click (pystray runs Open on every button release) or a
+# click straight after start-up can't open a second window.
+LAUNCH_GRACE_S = 5.0
+
+
+class WindowShower:
+    """Tray Open: bring the app window forward, or start one unless one is already on its way."""
+
+    def __init__(self, url: str, *, now: Callable[[], float] = time.monotonic) -> None:
+        self._url = url
+        self._now = now
+        self._launched_at: float | None = None
+        self._lock = threading.Lock()
+
+    def launch(self) -> None:
+        with self._lock:
+            self._launch()
+
+    def show(self) -> None:
+        with self._lock:
+            if browser.focus_existing_window():
+                self._launched_at = None  # the window is up: a later Open after closing it opens at once
+                return
+            if self._launched_at is not None and self._now() - self._launched_at < LAUNCH_GRACE_S:
+                return
+            self._launch()
+
+    def _launch(self) -> None:
+        browser.open_app_window(self._url)
+        self._launched_at = self._now()
+
+
 # Quit waits for the app window to close before stopping the server: the closing page sends its
 # last notes/task save (a keepalive request on pagehide), which needs the server still up.
 QUIT_POLL_S = 0.05
@@ -242,10 +275,11 @@ def _run_windows_app(
         message_box(f"ToDoApp couldn't start on port {port}.{where}")
         return 1
 
+    shower = WindowShower(url)
     if not args.no_browser:
-        browser.open_app_window(url)
+        shower.launch()
 
-    tray.run_tray(on_open=lambda: _show_window(url), on_quit=lambda: _quit_app(server))
+    tray.run_tray(on_open=shower.show, on_quit=lambda: _quit_app(server))
     server.should_exit = True
     thread.join(timeout=10)
     return 0

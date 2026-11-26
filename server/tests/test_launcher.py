@@ -343,3 +343,51 @@ def test_close_app_windows_is_a_no_op_off_windows(monkeypatch):
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows window enumeration")
 def test_close_app_windows_ignores_other_titles():
     assert browser.close_app_windows("ToDoApp test window that does not exist 7f3a") == 0
+
+
+# --- tray Open: a double-click must not open two windows ----------------------
+# pystray runs Open on every left-button release, so a double-click calls it twice. Edge takes a
+# moment to draw a new --app window, so the second call can't see the first window yet.
+
+
+@pytest.fixture
+def opener(monkeypatch):
+    calls: list[str] = []
+    windows: list[str] = []  # app windows that are drawn on screen
+    clock = SimpleNamespace(t=100.0)
+    monkeypatch.setattr(browser, "focus_existing_window", lambda title="ToDoApp": bool(windows))
+    monkeypatch.setattr(browser, "open_app_window", lambda url, env=None: calls.append(url))
+    shower = launcher_main.WindowShower("http://127.0.0.1:8797/", now=lambda: clock.t)
+    return SimpleNamespace(shower=shower, calls=calls, windows=windows, clock=clock)
+
+
+def test_double_click_on_tray_opens_one_window(opener):
+    opener.shower.show()
+    opener.clock.t += 0.3  # second release of the double-click; the window isn't drawn yet
+    opener.shower.show()
+    assert opener.calls == ["http://127.0.0.1:8797/"]
+
+
+def test_open_soon_after_startup_does_not_open_a_second_window(opener):
+    opener.shower.launch()  # the window opened at start-up
+    opener.clock.t += 1.0
+    opener.shower.show()
+    assert opener.calls == ["http://127.0.0.1:8797/"]
+
+
+def test_open_after_the_window_was_closed_opens_a_new_one_at_once(opener):
+    opener.shower.show()
+    opener.windows.append("app")
+    opener.clock.t += 0.5
+    opener.shower.show()  # focuses the drawn window, which clears the guard
+    opener.windows.clear()  # the user closes it
+    opener.clock.t += 0.5
+    opener.shower.show()
+    assert opener.calls == ["http://127.0.0.1:8797/"] * 2
+
+
+def test_open_retries_if_the_launched_window_never_appeared(opener):
+    opener.shower.show()
+    opener.clock.t += launcher_main.LAUNCH_GRACE_S + 0.1
+    opener.shower.show()
+    assert opener.calls == ["http://127.0.0.1:8797/"] * 2
